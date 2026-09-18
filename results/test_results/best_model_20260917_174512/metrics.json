@@ -1,0 +1,35 @@
+{
+  "checkpoint": "results/checkpoints/DMJO/full/best_model.pt",
+  "checkpoint_label": "best_model.pt (DMJO/full/best_model.pt)",
+  "timestamp": "2026-09-17T17:45:45.392901",
+  "environment": {
+    "num_users": 120,
+    "num_uavs": 6,
+    "num_jammers": 2,
+    "area_radius": 500
+  },
+  "active_uavs": 6,
+  "n_episodes": 10,
+  "results": {
+    "reward": {
+      "mean": -26048.2355,
+      "std": 1286.1134
+    },
+    "latency": {
+      "mean": 202.787,
+      "std": 9.5847
+    },
+    "tx": {
+      "mean": 1.755,
+      "std": 0.2083
+    },
+    "noma": {
+      "mean": 5.4542,
+      "std": 0.4213
+    },
+    "energy": {
+      "mean": 1149.562321,
+      "std": 31.242583
+    }
+  }
+}

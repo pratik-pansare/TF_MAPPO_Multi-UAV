@@ -3,11 +3,12 @@ __pycache__/
 *.pyc
 *.pyo
 .ipynb_checkpoints/
-
-# Ignore complete results folder
-results/
-
-*.egg-info/
-.env
 .DS_Store
 *.zip
+*.env
+
+# Ignore heavy checkpoints and large raw binary data
+results/checkpoints/
+*.pt
+*.npz
+*.jsonl

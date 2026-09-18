@@ -1,0 +1,35 @@
+{
+    "method": "MAPPO",
+    "num_seeds": 1,
+    "total_steps_per_seed": 500000,
+    "metrics_ci95": {
+        "latency_s": {
+            "mean": 25465.598995082197,
+            "std": 0.0,
+            "ci95": 0.0,
+            "low_ci": 25465.598995082197,
+            "high_ci": 25465.598995082197
+        },
+        "energy_j": {
+            "mean": 576900457.2916665,
+            "std": 0.0,
+            "ci95": 0.0,
+            "low_ci": 576900457.2916665,
+            "high_ci": 576900457.2916665
+        },
+        "completion_ratio_pct": {
+            "mean": 0.0,
+            "std": 0.0,
+            "ci95": 0.0,
+            "low_ci": 0.0,
+            "high_ci": 0.0
+        },
+        "trajectory_distance_m": {
+            "mean": 12998001.499884835,
+            "std": 0.0,
+            "ci95": 0.0,
+            "low_ci": 12998001.499884835,
+            "high_ci": 12998001.499884835
+        }
+    }
+}

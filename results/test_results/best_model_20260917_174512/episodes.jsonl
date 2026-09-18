@@ -1,0 +1,10 @@
+{"episode": 1, "reward": -27399.6256, "latency": 213.0009, "tx": 1.53, "noma": 5.536, "energy": 1156.062525}
+{"episode": 2, "reward": -26423.6401, "latency": 205.206, "tx": 1.628, "noma": 5.604, "energy": 1130.736243}
+{"episode": 3, "reward": -27970.5536, "latency": 216.9394, "tx": 1.474, "noma": 4.39, "energy": 1164.634534}
+{"episode": 4, "reward": -27455.9951, "latency": 213.4501, "tx": 1.438, "noma": 5.054, "energy": 1136.823583}
+{"episode": 5, "reward": -24565.3236, "latency": 191.8538, "tx": 1.954, "noma": 5.65, "energy": 1131.103812}
+{"episode": 6, "reward": -23909.4678, "latency": 186.5237, "tx": 2.03, "noma": 5.93, "energy": 1118.268755}
+{"episode": 7, "reward": -26511.5285, "latency": 205.9417, "tx": 1.774, "noma": 5.336, "energy": 1113.749636}
+{"episode": 8, "reward": -24764.4051, "latency": 193.6213, "tx": 1.942, "noma": 5.718, "energy": 1208.770815}
+{"episode": 9, "reward": -25551.8553, "latency": 198.7284, "tx": 1.872, "noma": 5.566, "energy": 1200.948534}
+{"episode": 10, "reward": -25929.96, "latency": 202.6051, "tx": 1.908, "noma": 5.758, "energy": 1134.524769}
