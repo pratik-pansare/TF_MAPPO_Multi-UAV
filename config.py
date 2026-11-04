@@ -54,8 +54,8 @@ IOT_TX_POWER_DBM       = 20      # IoT transmission power (dBm)
 ENV_CONSTANT_A         = 9.6177  # Environmental constant a
 ENV_CONSTANT_B         = 0.1581  # Environmental constant b
 PATH_LOSS_EXPONENT     = 2.5
-LOS_ATTENUATION_DB     = 0.0     # Excessive LoS path loss (dB)
-NLOS_ATTENUATION_DB    = -20.0   # Excessive NLoS path loss (dB)
+LOS_ATTENUATION_DB     = 1.0     # Excessive LoS path loss (dB)
+NLOS_ATTENUATION_DB    = 20.0    # Excessive NLoS path loss (dB) (Corrected positive attenuation)
 NOISE_PSD_DBM          = -130    # Noise PSD (dBm/Hz)
 CARRIER_FREQUENCY      = 2e9     # Carrier frequency (2 GHz)
 RICIAN_K_FACTOR        = 10
@@ -67,22 +67,22 @@ U2U_TX_POWER_DBM       = 24      # 24 dBm U2U transmit power
 U2U_CONTROL_PKT_SIZE   = 1e5     # Size of control info exchanged (bits)
 
 # ============================================================
-# 4. TASK & COMPUTATION MODEL
+# 4. TASK & COMPUTATION MODEL (Paper Section III.C)
 # ============================================================
-IOT_CPU_FREQUENCY      = 0.5e9   # IoT local CPU frequency (Hz)
+IOT_CPU_FREQUENCY      = 0.5e9   # IoT local CPU frequency (0.5 GHz)
 EFFECTIVE_CAPACITANCE  = 1e-28   # Switched capacitance coefficient kappa_m
 
-TASK_DATA_SIZE_RANGE   = (0.5e6, 5e6)  # Task data size range (bits)
-TASK_DATA_SIZE         = 2.75e6
-TASK_CPU_CYCLES_RANGE  = (0.1e9, 1e9)  # Required CPU cycles per task
-TASK_DEADLINE_RANGE    = (0.2, 2.0)    # Task deadline range (seconds)
-TASK_GENERATION_PROB   = 0.7           # Task generation probability per slot
+TASK_DATA_SIZE_RANGE   = (0.5e6, 2.5e6)  # Task input data size range (bits)
+CYCLES_PER_BIT_RANGE   = (300, 700)      # Required CPU cycles per bit
+TASK_DEADLINE_RANGE    = (1.0, 3.0)      # Task deadline range (seconds)
+TASK_GENERATION_PROB   = 0.7             # Task generation probability per slot
 
 # ============================================================
 # 5. TRUST & FAULT MODEL
 # ============================================================
-CERTIFICATE_DURATION   = 400     # Certificate duration (slots)
-FAULT_PROBABILITY      = 0.002   # Per-slot UAV operational fault probability
+CERTIFICATE_DURATION   = 1000    # Certificate duration (slots, valid for episode)
+FAULT_PROBABILITY      = 0.001   # Per-slot UAV operational fault probability
+
 MIN_BATTERY_RESERVE    = 50.0    # Reserve energy threshold (Joules)
 MAX_SERVICE_RADIUS     = 600.0   # Maximum UAV service coverage radius (m)
 
@@ -119,7 +119,7 @@ MAPPO_CRITIC_HIDDEN_DIM = 512
 TOTAL_TIMESTEPS        = 5_000_000
 EVAL_INTERVAL          = 50_000
 CHECKPOINT_INTERVAL    = 500_000
-LOG_INTERVAL           = 20_000
+LOG_INTERVAL           = 2500
 NUM_SEEDS              = 5       # 5 random seeds for 95% CI reporting
 
 # ============================================================

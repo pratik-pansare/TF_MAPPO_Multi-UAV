@@ -1,0 +1,20 @@
+{
+  "mode": "stress",
+  "num_users": 180,
+  "num_uavs": 8,
+  "num_clusters": 8,
+  "area_radius": 600.0,
+  "num_time_slots": 500,
+  "slot_duration": 1.0,
+  "total_steps": 200000,
+  "rollout_length": 500,
+  "ppo_epochs": 4,
+  "num_mini_batches": 5,
+  "lr_actor": 0.0003,
+  "lr_critic": 0.0001,
+  "lambda_w": 1.0,
+  "fault_prob": 0.01,
+  "cert_duration": 250,
+  "device": "cpu"
+}
+

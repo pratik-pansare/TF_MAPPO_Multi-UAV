@@ -24,10 +24,10 @@ from config import (
     MAPPO_PPO_EPOCHS, MAPPO_NUM_MINI_BATCHES,
     MAPPO_HIDDEN_DIM, MAPPO_CRITIC_HIDDEN_DIM,
 )
-from src.actor import GaussianOnlyActor
+from src.actor import HybridActionMaskedActor
 from src.buffer import RolloutBuffer
 
-_ActorClass = GaussianOnlyActor
+_ActorClass = HybridActionMaskedActor
 
 
 class CentralisedCritic(nn.Module):

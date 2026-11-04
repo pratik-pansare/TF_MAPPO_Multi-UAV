@@ -23,6 +23,7 @@ from src.mappo_agent import MAPPOAgent
 from src.baselines.maddpg_agent import MADDPGAgent
 from src.baselines.matd3_agent import MATD3Agent
 from src.baselines.greedy_agent import GreedyOffloadingAgent
+from src.baselines.local_agent import LocalExecutionAgent
 
 
 def make_agent(method, obs_dim, state_dim, action_dim, n_agents, device='cpu'):
@@ -72,7 +73,22 @@ def make_agent(method, obs_dim, state_dim, action_dim, n_agents, device='cpu'):
         )
 
     elif method_upper in ["GREEDY", "GREEDYOFFLOADING"]:
-        return GreedyOffloadingAgent(n_agents=n_agents, action_dim=action_dim)
+        return GreedyOffloadingAgent(
+            obs_dim=obs_dim,
+            state_dim=state_dim,
+            action_dim=action_dim,
+            n_agents=n_agents,
+            device=device
+        )
+
+    elif method_upper in ["LOCAL", "LOCALONLY", "LOCALEXECUTION"]:
+        return LocalExecutionAgent(
+            obs_dim=obs_dim,
+            state_dim=state_dim,
+            action_dim=action_dim,
+            n_agents=n_agents,
+            device=device
+        )
 
     else:
         # Fallback default to Action-Masked MAPPO

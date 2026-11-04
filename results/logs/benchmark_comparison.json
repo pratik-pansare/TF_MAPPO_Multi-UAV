@@ -1,0 +1,52 @@
+[
+    {
+        "method": "MAPPO",
+        "latency_s_mean": 0.0,
+        "latency_s_ci": 0.0,
+        "energy_j_mean": 123547.46700543824,
+        "energy_j_ci": 5463.202763453748,
+        "completion_ratio_mean": 0.0,
+        "completion_ratio_ci": 0.0,
+        "flight_dist_m_mean": 6327.069226770608
+    },
+    {
+        "method": "MAPPO_NoMask",
+        "latency_s_mean": 1.114251379849829,
+        "latency_s_ci": 1.0920376529423783,
+        "energy_j_mean": 126398.91392473767,
+        "energy_j_ci": 4669.517056843138,
+        "completion_ratio_mean": 0.04766818331451256,
+        "completion_ratio_ci": 0.06730357980863154,
+        "flight_dist_m_mean": 6139.330616129379
+    },
+    {
+        "method": "MAPPO_NoTrust",
+        "latency_s_mean": 1.4759037449385541,
+        "latency_s_ci": 0.2245500151132678,
+        "energy_j_mean": 119713.48927267607,
+        "energy_j_ci": 5859.596887441882,
+        "completion_ratio_mean": 0.05699362386293071,
+        "completion_ratio_ci": 0.0005468663126154485,
+        "flight_dist_m_mean": 5464.3015135769865
+    },
+    {
+        "method": "Greedy",
+        "latency_s_mean": 2.2537883283089872,
+        "latency_s_ci": 0.016812570902381297,
+        "energy_j_mean": 42413.15297160789,
+        "energy_j_ci": 1.7639999999980986,
+        "completion_ratio_mean": 11.760023789462833,
+        "completion_ratio_ci": 0.2827666862203231,
+        "flight_dist_m_mean": 0.0
+    },
+    {
+        "method": "LocalOnly",
+        "latency_s_mean": 0.0,
+        "latency_s_ci": 0.0,
+        "energy_j_mean": 42123.12797160788,
+        "energy_j_ci": 0.0,
+        "completion_ratio_mean": 0.0,
+        "completion_ratio_ci": 0.0,
+        "flight_dist_m_mean": 0.0
+    }
+]

@@ -110,7 +110,7 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
 
             ep_reward += float(np.mean(rewards[:env.num_active]))
 
-            slot_lat = info.get('total_latency', 0.0) / max(env.num_users, 1)
+            slot_lat = info.get('mean_slot_latency', info.get('total_latency', 0.0) / max(env.num_users, 1))
             ep_latency_sum += slot_lat
 
             slot_energy = info.get('total_energy', 0.0)
@@ -120,11 +120,19 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
             ep_traj_dist += np.sum(np.linalg.norm(curr_uav_pos[:, :2] - prev_uav_pos[:, :2], axis=1))
             prev_uav_pos = curr_uav_pos
 
-            eligibility_ratio = np.mean(env.trust_manager.eligibility[:env.num_active])
+            if hasattr(env, 'fault_manager'):
+                eligibility_ratio = np.mean(env.fault_manager.eligibility[:env.num_active])
+            elif hasattr(env, 'trust_manager'):
+                eligibility_ratio = np.mean(env.trust_manager.eligibility[:env.num_active])
+            else:
+                eligibility_ratio = 1.0
             ep_eligibility_sum += eligibility_ratio
 
-            ep_tasks_completed += info.get('completed_tasks', 0)
-            ep_tasks_generated += max(info.get('completed_tasks', 0) + info.get('deadline_violations', 0), 1)
+            step_comp = info.get('completed_tasks_step', info.get('completed_tasks', 0))
+            step_exp = info.get('expired_tasks_step', info.get('deadline_violations', 0))
+            ep_tasks_completed += step_comp
+            new_gen = sum(1 for d in env.devices if d.current_task is not None)
+            ep_tasks_generated += max(step_comp + step_exp, new_gen)
 
             obs, state = next_obs, next_state
 
@@ -224,4 +232,11 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
 
 
 if __name__ == "__main__":
-    run_100_episodes(100, max_steps_per_episode=500)
+    import argparse
+    parser = argparse.ArgumentParser(description="Run evaluation episodes for paper validation")
+    parser.add_argument("--episodes", type=int, default=100, help="Number of evaluation episodes")
+    parser.add_argument("--steps", type=int, default=500, help="Maximum steps per episode")
+    parser.add_argument("--device", type=str, default="cpu", help="Compute device")
+    args = parser.parse_args()
+
+    run_100_episodes(num_episodes=args.episodes, max_steps_per_episode=args.steps, device=args.device)

@@ -54,7 +54,7 @@ def train_single_seed(args, seed, method="MAPPO"):
         obs_dim=env.local_obs_dim,
         state_dim=env.global_state_dim,
         action_dim=env.agent_action_dim,
-        action_mask_dim=env.agent_action_dim
+        action_mask_dim=env.action_mask_dim
     )
 
     tracker = MetricTracker()
@@ -67,6 +67,7 @@ def train_single_seed(args, seed, method="MAPPO"):
     episode_count = 0
     best_reward = -1e9
     start_time = time.time()
+    progress_records = []
 
     while global_step < args.total_steps:
         # Collect rollout of MAPPO_ROLLOUT_LENGTH steps
@@ -108,21 +109,80 @@ def train_single_seed(args, seed, method="MAPPO"):
         # Logging & Checkpointing
         if global_step % _cfg.LOG_INTERVAL < _cfg.MAPPO_ROLLOUT_LENGTH:
             summary = tracker.get_episode_summary()
-            mean_ep_reward = update_info.get('actor_loss', 0.0)
+            ep_reward = summary.get('mean_step_reward', 0.0)
             elapsed = time.time() - start_time
             sps = global_step / max(elapsed, 1.0)
 
             print(f"  [Seed {seed} | Step {global_step:7,d}/{args.total_steps:,d}] "
                   f"SPS: {sps:4.0f} | Latency: {summary['avg_latency']:5.3f}s | "
                   f"Task Ratio: {summary['completion_ratio_pct']:5.1f}% | "
-                  f"Energy: {summary['total_energy']:7.1f}J")
+                  f"Energy: {summary['total_energy']:7.1f}J | Reward: {ep_reward:.3f}")
 
-            if mean_ep_reward > best_reward:
-                best_reward = mean_ep_reward
+            rec = {
+                'step': global_step,
+                'episode': episode_count,
+                'sps': sps,
+                'latency': summary['avg_latency'],
+                'completion_ratio': summary['completion_ratio_pct'],
+                'energy': summary['total_energy'],
+                'mean_reward': ep_reward,
+                'actor_loss': update_info.get('actor_loss', 0.0),
+                'critic_loss': update_info.get('critic_loss', 0.0),
+                'approx_kl': update_info.get('approx_kl', 0.0),
+            }
+            progress_records.append(rec)
+
+            if ep_reward > best_reward:
+                best_reward = ep_reward
                 agent.save(os.path.join(out_dir, "best_model.pt"))
 
     agent.save(os.path.join(out_dir, "final_model.pt"))
+    tracker.export_reward_components_csv(os.path.join(out_dir, "reward_components.csv"))
+
+    # Save progress CSV
+    import csv
+    if progress_records:
+        csv_file = os.path.join(out_dir, "training_progress.csv")
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(progress_records[0].keys()))
+            writer.writeheader()
+            writer.writerows(progress_records)
+
+        # Plot training curve
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            fig, axs = plt.subplots(2, 2, figsize=(10, 8), dpi=150)
+            steps = [r['step'] for r in progress_records]
+
+            axs[0, 0].plot(steps, [r['mean_reward'] for r in progress_records], color='#1f77b4', lw=1.5)
+            axs[0, 0].set_title('Mean Step Reward')
+            axs[0, 0].set_xlabel('Steps')
+
+            axs[0, 1].plot(steps, [r['completion_ratio'] for r in progress_records], color='#2ca02c', lw=1.5)
+            axs[0, 1].set_title('Task Completion Ratio (%)')
+            axs[0, 1].set_xlabel('Steps')
+
+            axs[1, 0].plot(steps, [r['latency'] for r in progress_records], color='#ff7f0e', lw=1.5)
+            axs[1, 0].set_title('Average Latency (s)')
+            axs[1, 0].set_xlabel('Steps')
+
+            axs[1, 1].plot(steps, [r['actor_loss'] for r in progress_records], label='Actor Loss', color='#d62728', lw=1.2)
+            axs[1, 1].plot(steps, [r['critic_loss'] for r in progress_records], label='Critic Loss', color='#9467bd', lw=1.2)
+            axs[1, 1].set_title('Losses')
+            axs[1, 1].set_xlabel('Steps')
+            axs[1, 1].legend()
+
+            plt.tight_layout()
+            plt.savefig(os.path.join(out_dir, "training_curve.png"))
+            plt.close()
+        except Exception as e:
+            print(f"  [Warning] Plotting failed: {e}")
+
     final_summary = tracker.get_episode_summary()
+    with open(os.path.join(out_dir, "summary.json"), "w") as f:
+        json.dump(final_summary, f, indent=4)
     print(f"  Finished Seed {seed}! Final Completion Ratio: {final_summary['completion_ratio_pct']:.2f}%\n")
     return final_summary
 
@@ -196,7 +256,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--seed", type=int, default=42, help="Initial random seed")
     parser.add_argument("--device", type=str, default="cpu", help="Compute device: cpu or cuda")
+    parser.add_argument("--config", type=str, default="", help="Path to config JSON (e.g. configs/smoke.json)")
     parser.add_argument("--ablation", type=str, default="full", help="Ablation mode")
 
     args = parser.parse_args()
+    if args.config and os.path.exists(args.config):
+        with open(args.config, "r") as f:
+            cfg_dict = json.load(f)
+            if "total_steps" in cfg_dict: args.total_steps = cfg_dict["total_steps"]
+            if "num_uavs" in cfg_dict: args.num_uavs = cfg_dict["num_uavs"]
+            if "num_users" in cfg_dict: args.num_iot = cfg_dict["num_users"]
+            if "device" in cfg_dict: args.device = cfg_dict["device"]
+
     train_multi_seeds(args)

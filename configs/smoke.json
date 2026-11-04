@@ -1,0 +1,20 @@
+{
+  "mode": "smoke",
+  "num_users": 30,
+  "num_uavs": 3,
+  "num_clusters": 3,
+  "area_radius": 300.0,
+  "num_time_slots": 50,
+  "slot_duration": 1.0,
+  "total_steps": 1000,
+  "rollout_length": 100,
+  "ppo_epochs": 2,
+  "num_mini_batches": 2,
+  "lr_actor": 0.0003,
+  "lr_critic": 0.0001,
+  "lambda_w": 0.5,
+  "fault_prob": 0.005,
+  "cert_duration": 200,
+  "device": "cpu"
+}
+

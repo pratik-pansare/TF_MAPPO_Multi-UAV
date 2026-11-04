@@ -6,7 +6,7 @@ __pycache__/
 .DS_Store
 *.zip
 *.env
-
+Implementation_Prompt.md
 # Ignore heavy checkpoints and large raw binary data
 results/checkpoints/
 *.pt

@@ -1,110 +1,67 @@
 """
-Greedy Offloading Baseline  (Table I — Row 5)
-===============================================
-Nearest-UAV association without caching awareness.
-
-Policy (rule-based, no learning):
-  Each IoT device selects the geographically closest UAV and always
-  offloads its task there, regardless of:
-    • UAV load / queue depth
-    • Cached program availability (cache-unaware)
-    • Channel quality or interference
-    • NOMA pairing opportunities
-
-  UAV trajectories are fixed circular orbits (no learned movement).
-
-This gives a strong greedy upper bound on simple distance-based
-offloading and a lower bound on cache-aware methods.
-
-Interface (identical to MAPPOAgent):
-    get_actions(obs_all, state, num_active) → actions, log_probs(=0), values(=0)
-    get_values(state)                       → zeros
-    update(buffer)                          → empty metrics  (no learning)
-    save(path) / load(path)                 → no-ops
-
-Action encoding:
-  The env's agent_action_dim vector is set to [-1, …, -1] (all zeros
-  after tanh), signalling the env wrapper to apply the greedy override.
-  The greedy logic itself lives in env.py's _greedy_offload_override()
-  method, which this agent activates by setting the GREEDY_MODE flag.
-
-  If env.py does not implement _greedy_offload_override(), actions are
-  passed through as-is and the env uses its standard offloading logic
-  driven by the all-zeros action vector (minimum-effort signal).
+Greedy Offloading Baseline Agent
+=================================
+Rule-based heuristic baseline:
+  - Each operational UAV m is greedily assigned to cluster (m % C) + 1.
+  - UAV flies directly towards the cluster centroid.
+  - UAV allocates full CPU capacity (cpu_fraction = 1.0) to serve offloaded tasks.
+  - No neural network training required.
 """
 
-import os
-import sys
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
 
 
 class GreedyOffloadingAgent:
-    """
-    Greedy Offloading baseline (Row 5).
+    """Greedy distance & full-capacity heuristic agent."""
 
-    Rule-based: always emits the action vector that signals "offload to
-    nearest UAV" to the environment.  No neural network, no training.
-    """
+    METHOD = "Greedy"
 
-    METHOD = "GreedyOffloading"
-
-    def __init__(self, obs_dim, state_dim, action_dim, n_agents,
-                 device="cpu", share_actor=False):
-        self.obs_dim    = obs_dim
-        self.state_dim  = state_dim
+    def __init__(self, obs_dim=16, state_dim=92, action_dim=5, n_agents=5,
+                 device="cpu", n_clusters=5, **kwargs):
+        self.obs_dim = obs_dim
+        self.state_dim = state_dim
         self.action_dim = action_dim
-        self.n_agents   = n_agents
-        self.device     = device
+        self.n_agents = n_agents
+        self.device = device
+        self.n_clusters = n_clusters
         self.total_updates = 0
 
-        # Greedy action: zeros map to tanh(0)=0, interpreted by env as
-        # "minimum effort / nearest association". Env must handle the rest.
-        self._greedy_action = np.zeros(action_dim, dtype=np.float32)
-
-        # Expose a flag so the env can detect this agent type
-        self.GREEDY_MODE = True
-
-    # ----------------------------------------------------------
-    # Action selection  (rule-based, O(1))
-    # ----------------------------------------------------------
-    def get_actions(self, obs_all, state, num_active=None):
+    def get_actions(self, obs_all, state, action_mask=None, num_active=None):
         """
-        Return identical all-zero actions for all agents.
-        The environment's greedy override will resolve the actual
-        nearest-UAV assignment per IoT device each time step.
+        Returns greedy actions:
+          - cluster_id: (m % n_clusters) + 1
+          - movement: direction towards assigned cluster centroid from obs
+          - cpu_fraction: 1.0
         """
-        n_active  = num_active or self.n_agents
-        actions   = np.zeros((self.n_agents, self.action_dim), dtype=np.float32)
+        n_active = num_active or self.n_agents
+        actions = np.zeros((self.n_agents, self.action_dim), dtype=np.float32)
+
+        for m in range(n_active):
+            cluster_choice = (m % self.n_clusters) + 1
+            if action_mask is not None and action_mask[m, cluster_choice] == 0:
+                cluster_choice = 0  # Fallback to idle if masked
+
+            # Extract relative centroid vector from observation if available (idx 10, 11)
+            dx = float(obs_all[m][10]) if len(obs_all[m]) > 11 else 0.0
+            dy = float(obs_all[m][11]) if len(obs_all[m]) > 11 else 0.0
+            norm = np.sqrt(dx**2 + dy**2) + 1e-6
+            dir_x = np.clip(dx / norm, -1.0, 1.0)
+            dir_y = np.clip(dy / norm, -1.0, 1.0)
+
+            actions[m] = [float(cluster_choice), dir_x, dir_y, 0.0, 1.0]
+
         log_probs = np.zeros(self.n_agents, dtype=np.float32)
-        values    = np.zeros(self.n_agents, dtype=np.float32)
-        # Only fill active agents — padded slots remain zero
-        for i in range(n_active):
-            actions[i] = self._greedy_action
+        values = np.zeros(self.n_agents, dtype=np.float32)
         return actions, log_probs, values
 
     def get_values(self, state):
         return np.zeros(self.n_agents, dtype=np.float32)
 
-    # ----------------------------------------------------------
-    # No learning — update is a no-op
-    # ----------------------------------------------------------
-    def update(self, buffer=None) -> dict:
-        """Rule-based agent: no gradient updates."""
-        return dict(actor_loss=0.0, critic_loss=0.0,
-                    entropy=0.0, approx_kl=0.0)
+    def update(self, buffer):
+        return {'actor_loss': 0.0, 'critic_loss': 0.0, 'entropy': 0.0, 'approx_kl': 0.0}
 
-    # ----------------------------------------------------------
-    # Checkpoint (nothing to save)
-    # ----------------------------------------------------------
-    def save(self, path: str):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        import json
-        meta = {'method': self.METHOD, 'total_updates': self.total_updates}
-        with open(path.replace('.pt', '.json'), 'w') as f:
-            json.dump(meta, f, indent=2)
+    def save(self, path):
+        pass
 
-    def load(self, path: str):
-        pass   # no parameters to restore
+    def load(self, path):
+        return True
