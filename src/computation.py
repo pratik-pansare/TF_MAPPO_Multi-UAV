@@ -6,12 +6,10 @@ Target Journal: IEEE Internet of Things Journal
 
 Models:
   - UAV CPU Capacity Constraint: sum_i y_{i,m}(t) f_{i,m}(t) <= F_m^max
-  - Discrete-event FIFO/EDF job scheduling queue on each UAV
-  - Macroscopic Workload Backlog:
-      Q_m(t) = sum_{k in Queue_m} W_k^{rem}(t)  [CPU cycles]
-      Q_m(t+1) = [Q_m(t) - F_m(t) * Delta_t]^+ + sum_i y_{i,m}(t) W_i(t)
-  - Causal timestamping & physical delay tracking:
-      t_finish - t_gen = T_{i,m}^{up} + T_{i,m}^{que} + T_{i,m}^{exe}
+  - Multi-Slot Uplink Transmission Progress with Remaining Bits Tracking
+  - Discrete-Event FIFO/EDF Job Scheduling Queue on Each UAV
+  - Causal Timestamping & Physical Latency Decomposition:
+      total_latency = (t_finish - t_gen) = T_up + T_que + T_exe
   - Continues processing existing queued work across slots even without new arrivals.
 """
 
@@ -25,11 +23,11 @@ from src.task import TaskStatus
 
 
 class ComputationManager:
-    """Manages UAV onboard computation queues, CPU allocation, and task execution."""
+    """Manages UAV onboard computation queues, CPU allocation, and multi-slot task execution."""
 
     def __init__(self, n_uavs):
         self.n_uavs = n_uavs
-        # Onboard job queues for each UAV
+        # Onboard job queues for each UAV (stores tasks that finished uploading)
         self.uav_queues = [deque() for _ in range(n_uavs)]
         self.completed_tasks = []
         self.expired_tasks = []
@@ -68,14 +66,67 @@ class ComputationManager:
     def admit_task(self, uav_id, task, upload_delay_s, current_time_s):
         """
         Admit a task into UAV onboard queue upon upload completion.
+        Maintains backward compatibility.
         """
         task.serving_uav_id = uav_id
-        task.t_upload_start = current_time_s
+        if task.t_upload_start is None:
+            task.t_upload_start = current_time_s
         task.t_upload_end = current_time_s + upload_delay_s
-        task.upload_delay = upload_delay_s
+        task.upload_delay = task.t_upload_end - task.t_upload_start
         task.t_queue_entry = task.t_upload_end
+        task.remaining_bits = 0.0
         task.status = TaskStatus.QUEUED
         self.uav_queues[uav_id].append(task)
+
+    def process_uplinks(self, active_links, rates, current_time_s, delta_t=1.0):
+        """
+        Causally progress multi-slot active uplinks.
+        active_links: list of (uav_id, task)
+        rates: dict {task_id: rate_bps}
+        Returns: newly_queued_tasks, upload_expired_tasks
+        """
+        newly_queued = []
+        upload_expired = []
+
+        for uav_id, task in active_links:
+            rate = max(rates.get(task.task_id, 1e5), 1e3)
+
+            if task.t_upload_start is None:
+                task.t_upload_start = current_time_s
+                task.status = TaskStatus.UPLOADING
+                task.serving_uav_id = uav_id
+
+            bits_can_transfer = rate * float(delta_t)
+            if task.remaining_bits <= bits_can_transfer:
+                # Upload finishes during this slot
+                t_tx = task.remaining_bits / rate
+                task.t_upload_end = current_time_s + t_tx
+                task.upload_delay = task.t_upload_end - task.t_upload_start
+                task.remaining_bits = 0.0
+                task.t_queue_entry = task.t_upload_end
+
+                if task.t_upload_end <= task.t_absolute_deadline:
+                    task.status = TaskStatus.QUEUED
+                    self.uav_queues[uav_id].append(task)
+                    newly_queued.append(task)
+                else:
+                    task.status = TaskStatus.EXPIRED_IN_UPLOADING
+                    task.t_finish = task.t_upload_end
+                    task.total_latency = task.t_finish - task.t_gen
+                    self.expired_tasks.append(task)
+                    upload_expired.append(task)
+            else:
+                # Partial transmission; persists in uploading state
+                task.remaining_bits -= bits_can_transfer
+                # Check if deadline already passed while uploading
+                if (current_time_s + delta_t) > task.t_absolute_deadline:
+                    task.status = TaskStatus.EXPIRED_IN_UPLOADING
+                    task.t_finish = current_time_s + delta_t
+                    task.total_latency = task.t_finish - task.t_gen
+                    self.expired_tasks.append(task)
+                    upload_expired.append(task)
+
+        return newly_queued, upload_expired
 
     def process_slot(self, uav_cpu_frequencies, current_time_s, delta_t=1.0):
         """
@@ -107,7 +158,7 @@ class ComputationManager:
 
                 if task.t_service_start is None:
                     task.t_service_start = now_est
-                    task.queue_delay = max(0.0, task.t_service_start - task.t_queue_entry)
+                    task.queue_delay = max(0.0, task.t_service_start - (task.t_queue_entry or task.t_gen))
                 task.status = TaskStatus.IN_SERVICE
 
                 cycles_needed = task.remaining_cycles
@@ -142,10 +193,7 @@ class ComputationManager:
         return slot_completed, slot_expired
 
     def update_queue_backlog(self, uav_id, aggregate_cpu_hz, newly_offloaded_workload, delta_t=1.0):
-        """
-        Macroscopic queue update for analytical checks (Eq. 18):
-        Q_m(t+1) = [Q_m(t) - F_m(t) * Delta_t]^+ + sum y_{i,m}(t) * W_i(t)
-        """
+        """Macroscopic queue backlog analytical check (Eq. 18)."""
         processed = float(aggregate_cpu_hz) * float(delta_t)
         current = self.queues[uav_id]
         updated = max(0.0, current - processed) + float(newly_offloaded_workload)

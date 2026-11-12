@@ -48,7 +48,13 @@ class GreedyOffloadingAgent:
             dir_x = np.clip(dx / norm, -1.0, 1.0)
             dir_y = np.clip(dy / norm, -1.0, 1.0)
 
-            actions[m] = [float(cluster_choice), dir_x, dir_y, 0.0, 1.0]
+            actions[m, 0] = float(cluster_choice)
+            # Prioritize all candidate offload slots with high score
+            actions[m, 1:-4] = 1.0
+            # Movement
+            actions[m, -4:-1] = [dir_x, dir_y, 0.0]
+            # Full CPU
+            actions[m, -1] = 1.0
 
         log_probs = np.zeros(self.n_agents, dtype=np.float32)
         values = np.zeros(self.n_agents, dtype=np.float32)

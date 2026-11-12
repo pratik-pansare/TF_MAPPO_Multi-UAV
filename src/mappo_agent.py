@@ -60,17 +60,21 @@ class MAPPOAgent:
     METHOD = "MAPPO"
 
     def __init__(self, obs_dim, state_dim, action_dim, n_agents,
-                 device='cpu', share_actor=True):
+                 device='cpu', share_actor=True, n_clusters=5, max_candidate_pool=8, **kwargs):
         self.obs_dim     = obs_dim
         self.state_dim   = state_dim
         self.action_dim  = action_dim
         self.n_agents    = n_agents
+        self.n_clusters  = n_clusters
+        self.max_candidate_pool = max_candidate_pool
         self.device      = device
         self.share_actor = share_actor
 
         if share_actor:
             self.actor  = _ActorClass(
                 obs_dim, action_dim,
+                n_clusters=n_clusters,
+                max_candidate_pool=max_candidate_pool,
                 hidden_dim=MAPPO_HIDDEN_DIM,
             ).to(device)
             self.actors    = [self.actor] * n_agents
@@ -79,6 +83,8 @@ class MAPPOAgent:
             self.actors = [
                 _ActorClass(
                     obs_dim, action_dim,
+                    n_clusters=n_clusters,
+                    max_candidate_pool=max_candidate_pool,
                     hidden_dim=MAPPO_HIDDEN_DIM,
                 ).to(device)
                 for _ in range(n_agents)
@@ -108,7 +114,7 @@ class MAPPOAgent:
         self.total_updates = 0
 
     @torch.inference_mode()
-    def get_actions(self, obs_all, state, action_mask=None, num_active=None):
+    def get_actions(self, obs_all, state, action_mask=None, num_active=None, deterministic=False):
         """
         Select feasible actions for all agents using action masks.
         """
@@ -127,7 +133,7 @@ class MAPPOAgent:
                     np.ascontiguousarray(action_mask[:n_active], dtype=np.float32)
                 ).to(self.device, non_blocking=True)
 
-            a_batch, lp_batch    = self.actor.get_action_and_log_prob(obs_batch, action_mask=mask_batch)
+            a_batch, lp_batch    = self.actor.get_action_and_log_prob(obs_batch, action_mask=mask_batch, deterministic=deterministic)
             actions[:n_active]   = a_batch.cpu().numpy()
             log_probs[:n_active] = lp_batch.cpu().numpy().flatten()
         else:
@@ -142,7 +148,7 @@ class MAPPOAgent:
                         np.ascontiguousarray(action_mask[i], dtype=np.float32)
                     ).unsqueeze(0).to(self.device, non_blocking=True)
 
-                a, lp        = self.actors[i % len(self.actors)].get_action_and_log_prob(obs_t, action_mask=mask_t)
+                a, lp        = self.actors[i % len(self.actors)].get_action_and_log_prob(obs_t, action_mask=mask_t, deterministic=deterministic)
                 actions[i]   = a.cpu().numpy().flatten()
                 log_probs[i] = lp.cpu().numpy().item()
 

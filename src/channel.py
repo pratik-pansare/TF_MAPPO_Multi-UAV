@@ -110,6 +110,23 @@ class ChannelModel:
         rate = self.compute_uplink_rate(iot_pos, uav_pos, tx_power, bandwidth)
         return data_size_bits / rate
 
+    def is_in_coverage(self, iot_pos, uav_pos, max_service_radius):
+        """Check if IoT device is within 3D or horizontal service coverage radius."""
+        d_3d = self.compute_distance_3d(iot_pos, uav_pos)
+        return bool(d_3d <= max_service_radius)
+
+    def evaluate_link_feasibility(self, iot_pos, uav_pos, tx_power, bandwidth, max_service_radius, r_min=1e5):
+        """
+        Evaluates physical coverage and minimum rate feasibility for link (i, m).
+        Returns: is_feasible (bool), rate (float), distance (float).
+        """
+        dist = self.compute_distance_3d(iot_pos, uav_pos)
+        if dist > max_service_radius:
+            return False, 0.0, dist
+        rate = self.compute_uplink_rate(iot_pos, uav_pos, tx_power, bandwidth)
+        feasible = bool(rate >= r_min)
+        return feasible, rate, dist
+
     def compute_u2u_rate(self, uav_pos1, uav_pos2, bandwidth=U2U_BANDWIDTH, tx_power_dbm=U2U_TX_POWER_DBM):
         """Compute U2U coordination transmission rate R_{m,n}^{u2u}(t) (Eq. 12)."""
         d_u2u = self.compute_distance_3d(uav_pos1, uav_pos2)

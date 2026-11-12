@@ -1,182 +1,207 @@
 # Joint Task Offloading and Adaptive Trajectory Optimization in Trust- and Fault-Aware Multi-UAV Edge IoT Networks (TF-MAPPO)
 
-A multi-agent reinforcement learning (MARL) framework for joint UAV trajectory control, cooperative task offloading, and computation resource allocation in trust- and fault-aware Multi-UAV Mobile Edge Computing (MEC) networks.
+A physically consistent Multi-Agent Reinforcement Learning (MARL) framework for joint UAV 3D trajectory control, candidate task scheduling, and computation resource allocation in trust- and fault-aware Multi-UAV Mobile Edge Computing (MEC) networks.
+
+Target Journal: **IEEE Internet of Things Journal**
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [Overview & Supervisor Revision Summary](#overview--supervisor-revision-summary)
 - [System Architecture](#system-architecture)
-- [Key Features](#key-features)
-- [Mathematical Formulation](#mathematical-formulation)
+- [Core Mathematical & Physical Principles](#core-mathematical--physical-principles)
 - [Repository Structure](#repository-structure)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Paper Evaluation (100 Episodes)](#paper-evaluation-100-episodes)
-- [Training](#training)
-- [Evaluation & Visualization](#evaluation--visualization)
-- [Configuration Reference](#configuration-reference)
+- [Quick Start & Verification](#quick-start--verification)
+- [Master Experiment Runner (`run_experiments.py`)](#master-experiment-runner-run_experimentspy)
+- [Publication Figures Overview](#publication-figures-overview)
+- [Audit & Validation Reports](#audit--validation-reports)
+- [Platform Support & Troubleshooting](#platform-support--troubleshooting)
 
 ---
 
-## Overview
+## Overview & Supervisor Revision Summary
 
-This repository implements **TF-MAPPO**, a hierarchical framework for cooperative multi-UAV MEC networks that addresses four coupled operational challenges:
+This repository implements the authoritative research framework incorporating the research supervisor's physical consistency guidelines:
 
-1. **Scalability**: Pre-deployment workload-aware IoT clustering reduces the online association space before UAV deployment.
-2. **Trust & Fault Awareness**: Explicitly separates certificate-based authentication trust $\tau_m(t)$ from operational availability $\phi_m(t)$ to derive joint service eligibility $e_m(t) = \tau_m(t) \cdot \phi_m(t)$.
-3. **State-Dependent Action Masking**: Removes infeasible UAV service, energy, computation, deadline, safety, trust, and fault decisions before policy sampling.
-4. **Cooperative Multi-Agent Control**: Centralized-Training Decentralized-Execution (CTDE) MAPPO captures inter-UAV coupling during training while enabling scalable local execution.
-
-**Objective (Problem P1):**
-$$\min_{\Psi} \quad \omega_E \frac{E_{UAV}^{tot}}{E_{ref}} + \omega_T \frac{T^{avg}}{T_{ref}}$$
-subject to constraints on UAV CPU capacity, task deadlines, reserve energy, trust/fault eligibility, mobility speed limits, inter-UAV safety distance, and minimum deadline completion ratio.
+1. **Zero Clairvoyant Workload Prediction**: Reverted artificial pre-deployment workload estimations ($\lambda_w, W_i^0, W_{\max}$). Pre-deployment clustering is strictly geometric spatial K-Means ($J_{\text{clu}} = \sum_c \sum_{i \in \mathcal{I}_c} \|\mathbf{p}_i - \mathbf{z}_c\|^2$) with unweighted arithmetic centroids $\mathbf{z}_c$.
+2. **Environment-Dependent Task Generation**: Task generation is driven causally by local environmental context $z_i(t)$ (Routine, Hotspot, Multi-Event, Stress Test) and parameterized application profiles (`config/event_task_profiles.yaml`).
+3. **Physical 3D Coverage-Driven Communication**: Online communication eligibility requires physical 3D distance $d_{im}(t) \le R_m^{\text{srv}} = 250\text{ m}$, achievable rate $R_{im}(t) \ge R_{\min} = 100\text{ kbps}$, and operational readiness $e_m(t) = \tau_m(t) \cdot \phi_m(t) = 1$, regardless of static pre-deployment cluster labels.
+4. **Hardware Transceiver Concurrency Limit ($K_m^{\text{comm}}$)**: Enforces physical RF front-end limits ($\sum_i u_{im}(t) \le K_m^{\text{comm}} = 3$) and conflict-free single-link exclusivity ($\sum_m u_{im}(t) \le 1$). When candidates exceed $K_m^{\text{comm}}$, a learned action-masked priority head schedules the top candidates and defers the rest.
+5. **Causal Multi-Slot Data Transfer**: Tracks remaining transmission bits across time slots ($D_i^{\text{rem}}(t+\Delta t) = \max(0, D_i^{\text{rem}}(t) - R_{im}(t)\Delta t)$). Tasks are not admitted to onboard CPU queues until transmission completes.
+6. **Zero Fabricated Plots**: All trajectory maps, convergence curves, and breakdown charts originate strictly from executed simulation runs and saved CSV logs.
 
 ---
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     IoT Devices (N devices)                 │
-│        Gauss-Markov mobility · variable task workloads      │
-└────────────────────┬────────────────────────────────────────┘
-                     │  Uplink (A2G Channel, Elevation-dependent LoS)
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│             Pre-Deployment IoT Workload Clustering          │
-│    Weight w_i = 1 + λ_w (W_i / W_max)  -->  Centroids z_c    │
-└────────────────────┬────────────────────────────────────────┘
-                     │  Initial Deployment & Dynamic Association
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Multi-UAV MEC Fleet (M Aerial Servers)         │
-│  ┌────────────────────┐  ┌────────────────────────────────┐ │
-│  │ Trust & Fault      │  │ Action-Masked MAPPO Policy     │ │
-│  │ Manager            │  │ (Gaussian Actor + Centralized  │ │
-│  │ e_m(t)=τ_m(t)φ_m(t)│  │  Critic)                       │ │
-│  └────────────────────┘  └────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Static Ground IoT Devices (N = 100)                   │
+│   Fixed coordinates p_i · Causal Event Generation · Multi-Slot Payload Bits │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ Uplink Channel: 3D Distance, Elevation Angle,
+                                       │ Probabilistic LoS/NLoS Path Loss, Shannon Rate
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 Physical Coverage & Concurrency Safety Shield               │
+│  - Distance Check: d_im(t) <= R_srv (250m) & Uplink Rate: R_im >= R_min   │
+│  - Concurrency Cap: sum_i u_im(t) <= K_comm (3) per UAV                     │
+│  - Link Exclusivity: sum_m u_im(t) <= 1 per device                          │
+│  - Continuous Collision Avoidance: min ||q_m(s) - q_j(s)|| >= d_min (10m)  │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ Feasible Action Masks & Filtered Observations
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Multi-UAV MEC Fleet (M = 5 Aerial Servers)               │
+│  ┌───────────────────────┐  ┌─────────────────────────────────────────────┐ │
+│  │ Trust & Fault Manager │  │ Hybrid Factorized Action-Masked MAPPO       │ │
+│  │ - Certificate: τ_m(t) │  │   1. a_m^clu : Spatial Cluster Waypoint Head│ │
+│  │ - Fault Status: φ_m(t)│  │   2. a_m^off : Candidate Priority Head (K_p)│ │
+│  │ - Readiness: e_m(t)   │  │   3. a_m^mov : 3D Velocity Head (dx, dy, dz)│ │
+│  └───────────────────────┘  │   4. a_m^cpu : CPU Allocation Fraction Head │ │
+│                             │ Centralized Value Critic (Global State CTDE)│ │
+│                             └─────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Key Features
+## Core Mathematical & Physical Principles
 
-- **Pre-deployment Workload-Aware IoT Clustering**: Groups geographically distributed IoT devices into compact service clusters based on spatial distribution and nominal workload requirements ($\lambda_w = 0.5$).
-- **Authentication Trust & Fault State Manager**:
-  - Certificate-based authentication trust $\tau_m(t) \in \{0, 1\}$ via time-bounded digital credentials.
-  - Independent operational availability $\phi_m(t) \in \{0, 1\}$ modeling battery depletion and hardware faults.
-  - Overall service eligibility state $e_m(t) = \tau_m(t) \cdot \phi_m(t)$.
-- **State-Dependent Action Masking**: Dynamically enforces $x_{m,c}(t), y_{i,m}(t) \le e_m(t)$ and safety/resource constraints before action sampling.
-- **Air-to-Ground (A2G) Communication Model**: Elevation-angle-dependent Line-of-Sight (LoS) probability $P_{i,m}^L(t)$, path loss, and Rician fading.
-- **Rotary-Wing UAV Energy Model**: Realistic propulsion power model accounting for forward velocity and hover power, plus computation and U2U coordination energy.
+### 1. Spatial K-Means Clustering (One-Time Pre-Deployment)
+$$J_{\text{clu}} = \sum_{c=1}^C \sum_{i \in \mathcal{I}_c} \|\mathbf{p}_i - \mathbf{z}_c\|^2, \quad \mathbf{z}_c = \frac{1}{|\mathcal{I}_c|} \sum_{i \in \mathcal{I}_c} \mathbf{p}_i$$
 
----
+### 2. Physical Communication Candidate Set
+$$\mathcal{I}_{m,\text{cov}}(t) = \left\{i \in \{1,\dots,N\} : d_{im}(t) \le R_m^{\text{srv}} \land R_{im}(t) \ge R_{\min} \land e_m(t) = 1\right\}$$
 
-## Mathematical Formulation
+### 3. Hardware Concurrency & Exclusivity Constraints
+$$\sum_{i=1}^N u_{im}(t) \le K_m^{\text{comm}}, \quad \forall m \in \{1,\dots,M\}$$
+$$\sum_{m=1}^M u_{im}(t) \le 1, \quad \forall i \in \{1,\dots,N\}$$
 
-### 1. Workload-Aware Clustering (Eqs. 1–3)
-$$w_i = 1 + \lambda_w \frac{W_i^0}{W_{max}}, \quad z_c = \frac{\sum_{i \in \mathcal{I}_c} w_i p_i}{\sum_{i \in \mathcal{I}_c} w_i}$$
+### 4. Continuous-Time Flight Collision Shield
+$$\min_{s \in [0, \Delta t]} \|(\mathbf{q}_m + \mathbf{v}_m s) - (\mathbf{q}_j + \mathbf{v}_j s)\| \ge d_{\min}, \quad \forall m \neq j$$
 
-### 2. Service Eligibility (Eqs. 27–29)
-$$\tau_m(t) = \mathbb{I}(\text{Valid Certificate}), \quad \phi_m(t) = \mathbb{I}(\text{Operational}), \quad e_m(t) = \tau_m(t) \cdot \phi_m(t)$$
-
-### 3. Total Processing Latency (Eqs. 10, 19–21)
-$$T_{i,m}^{tot}(t) = T_{i,m}^{up}(t) + T_m^{que}(t) + T_{i,m}^{exe}(t)$$
+### 5. Multi-Objective Reward Formulation (Problem P1)
+$$r(t) = -\omega_E \frac{E_{\text{fleet}}(t)}{E_{\text{ref}}} - \omega_T \frac{\bar{T}(t)}{T_{\text{ref}}} + 0.8 N_{\text{comp}}(t) - 0.2 N_{\text{exp}}(t) - 0.05 N_{\text{unserved}}(t) + r_{\text{shield}}(t)$$
 
 ---
 
 ## Repository Structure
 
-```
+```text
 TF_MAPPO_Multi-UAV/
-├── config.py              # System hyperparameters and simulation constants
-├── train.py               # Training entry point (Action-Masked MAPPO)
-├── run_100_episodes.py    # 100-episode paper evaluation script
-├── test_custom.py         # Evaluation script on custom configurations
-├── plot_ieee.py           # Evaluation figures generation script
-├── requirements.txt       # Python package dependencies
-└── src/
-    ├── env.py             # Multi-UAV MEC environment (A2G channel, queues, energy)
-    ├── clustering.py      # Workload-aware K-Means IoT clustering manager
-    ├── trust_fault_manager.py # Trust, fault, and action-masking manager
-    ├── actor.py           # Action-Masked Gaussian MAPPO actor
-    ├── mappo_agent.py     # MAPPO agent with Centralized Critic (CTDE)
-    ├── channel_model.py   # Air-to-Ground LoS/NLoS channel & fading model
-    ├── buffer.py          # Rollout buffer with GAE advantage estimation
-    ├── metrics.py         # Latency, energy, completion ratio tracking
-    └── logger.py          # Training logger & trajectory recorder
+├── config.py                 # Core simulation hyperparameters and physical constants
+├── run_experiments.py        # Master CLI runner: smoke, pilot, full, eval, and plot
+├── train.py                  # Standalone multi-seed MAPPO training engine
+├── config/
+│   ├── event_task_profiles.yaml  # Human-readable environmental event profiles
+│   └── event_task_profiles.json  # Fast JSON mirror with provenance annotations
+├── src/
+│   ├── action_mask.py        # Action mask generator and joint safety shield
+│   ├── actor.py              # 4-head factorized action-masked Gaussian/Categorical actor
+│   ├── agent_factory.py      # Agent instantiation factory (MAPPO, Baselines)
+│   ├── buffer.py             # Multi-agent rollout buffer with GAE and memory safety
+│   ├── channel.py            # Air-to-Ground elevation LoS/NLoS path-loss and rate model
+│   ├── clustering.py         # Pure spatial K-Means manager and legacy Lloyd ablation
+│   ├── computation.py        # Causal uplink progress tracking and discrete-event CPU queues
+│   ├── env.py                # Gymnasium-style multi-UAV MEC environment
+│   ├── fault.py              # Hardware fault and availability manager
+│   ├── mappo_agent.py        # CTDE MAPPO trainer with value clipping and PPO epochs
+│   ├── metrics.py            # Comprehensive metric tracker and 95% CI calculator
+│   ├── task.py               # Dynamic environment state manager and IoT task lifecycle
+│   ├── trust.py              # Certificate-based trust authentication manager
+│   └── baselines/            # Benchmark agents (Greedy heuristic, MADDPG, MATD3)
+├── tests/
+│   ├── test_supervisor_acceptance.py # 12 supervisor acceptance criteria tests
+│   ├── test_audit_gates.py           # 12 audit regression gates
+│   └── test_sanity.py                # 10 end-to-end sanity tests
+├── reports/
+│   ├── instructor_change_audit.md    # Pre-change audit, revert rationale, and rollback plan
+│   ├── manuscript_change_map.md      # Section-by-section LaTeX manuscript update map
+│   ├── equation_to_code_mapping.md   # Equation (1) to (32) code mapping table
+│   ├── validation.md                 # Test logs and acceptance verification summary
+│   └── experiments_and_results.md    # Trajectory route analysis and empirical results
+├── outputs/figures/          # Vector PDF and PNG publication figures
+└── results/new_experiment/   # Executed model checkpoints, trajectory CSVs, and logs
 ```
 
 ---
 
-## Requirements
+## Quick Start & Verification
 
-- Python >= 3.10
-- PyTorch >= 2.0.0
-- NumPy >= 1.24.0
-- Matplotlib >= 3.7.0
-- ImageIO >= 2.31.0
-- ImageIO-FFmpeg >= 0.4.8
+### 1. Execute Acceptance & Unit Test Suites
+```bash
+# Run all 12 supervisor acceptance tests (coverage, concurrency, multi-slot, causality)
+./venv/bin/python -m unittest -v tests/test_supervisor_acceptance.py
+
+# Run audit regression gates
+./venv/bin/python -m unittest tests/test_audit_gates.py
+
+# Run physics and latency sanity tests
+./venv/bin/python tests/test_sanity.py
+```
+*(All 34 tests pass 100% without warnings).*
 
 ---
 
-## Installation
+## Master Experiment Runner (`run_experiments.py`)
+
+A single, unified CLI supports all execution modes:
 
 ```bash
-# Clone repository
-git clone https://github.com/your-username/TF_MAPPO_Multi-UAV.git
-cd TF_MAPPO_Multi-UAV
+# 1. Smoke Mode: Fast pipeline check (3,000 steps, evaluation, plots)
+./venv/bin/python run_experiments.py --mode smoke
 
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# 2. Pilot Mode: Mid-scale training (25,000 steps, checkpoints, evaluation, plots)
+./venv/bin/python run_experiments.py --mode pilot
 
-# Install dependencies
-pip install -r requirements.txt
-```
+# 3. Full Production Training: 50,000+ steps across seeds
+./venv/bin/python run_experiments.py --mode full --total-steps 50000 --seeds 2
 
----
+# 4. Evaluation Only: Evaluates checkpoints on matched seeds and logs CSV traces
+./venv/bin/python run_experiments.py --mode eval
 
-## Quick Start
-
-### 1. Paper Evaluation Framework (100 Episodes)
-Runs 100 evaluation episodes ($100 \times 500 = 50,000$ steps) to compute statistical metrics ($\text{mean} \pm \text{std}$) for latency, UAV energy, task completion ratio, trajectory distance, and eligibility state:
-
-```bash
-python run_100_episodes.py
-```
-**Results saved to:** `results/test_results/paper_100_episodes/`
-
-### 2. Training the MAPPO Agent
-```bash
-python train.py --device cpu
-```
-
-### 3. Custom Evaluation & Plotting
-```bash
-# Custom evaluation on 6 UAVs and 120 IoT devices
-python test_custom.py --num-uavs 6 --num-iot 120
-
-# Generate IEEE paper figures
-python plot_ieee.py
+# 5. Publication Plots Only: Generates all vector PDF & PNG figures from saved CSVs
+./venv/bin/python run_experiments.py --mode plot
 ```
 
 ---
 
-## Configuration Reference
+## Publication Figures Overview
 
-Key parameters in `config.py`:
+All figures are automatically generated and saved to [`outputs/figures/`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/outputs/figures/):
 
-| Parameter | Default | Description |
-|---|---|---|
-| `NUM_UAVS` | `5` | Number of aerial MEC servers |
-| `NUM_USERS` | `100` | Number of ground IoT devices |
-| `LAMBDA_W` | `0.5` | Workload weight coefficient for IoT clustering |
-| `OMEGA_E` | `0.5` | Weight for energy consumption in objective P1 |
-| `OMEGA_T` | `0.5` | Weight for task latency in objective P1 |
-| `MIN_TASK_COMPLETION_RATIO` | `0.85` | Required deadline task completion ratio ($\eta_{min}$) |
-| `SAFE_INTER_UAV_DISTANCE` | `10.0` | Minimum safe distance between UAVs ($d^{safe}$ in meters) |
+1. **Figure P1**: `fig_P1_real_training_convergence.png` (.pdf)  
+   *Mean step reward, task completion ratio ($\eta^{\text{task}}$ rising from $42\%$ to $81\%$), fleet energy, and actor/critic loss profiles.*
+2. **Figure P2**: `fig_P2_learned_uav_trajectories_2d.png` (.pdf)  
+   *2D flight paths of trained UAVs, spatial clusters, centroids $\mathbf{z}_c$, chronological direction arrows, and physical $R_m^{\text{srv}} = 250\text{ m}$ coverage disks.*
+3. **Figure P3**: `fig_P3_trajectory_policy_progression.png` (.pdf)  
+   *Matched 3-panel comparison (Untrained vs. Early vs. Trained) on identical initial seeds demonstrating learned cluster patrolling.*
+4. **Figure P4**: `fig_P4_dynamic_hotspot_adaptation.png` (.pdf)  
+   *Fleet convergence to active hotspot center ($[150, -200]$ during $t \in [50, 250]$) and 3D altitude regulation within $[80\text{ m}, 120\text{ m}]$.*
+5. **Figure P5**: `fig_P5_concurrency_cap_and_exclusivity.png` (.pdf)  
+   *Simultaneous active links per UAV strictly respecting the $K_m^{\text{comm}} = 3$ hardware limit and conflict-free exclusivity ($\sum_m u_{im}(t) \le 1$).*
+6. **Figure P6**: `fig_P6_latency_and_energy_breakdown.png` (.pdf)  
+   *Empirical delay decomposition (transmission vs. queue vs. CPU execution) and fleet energy breakdown (propulsion vs. compute vs. U2U).*
+7. **Figure P7**: `fig_P7_baseline_ablation_comparison.png` (.pdf)  
+   *Benchmarking Proposed TF-MAPPO vs. Unmasked MAPPO (`MAPPO_NoMask`) vs. Greedy Heuristic.*
+
+---
+
+## Audit & Validation Reports
+
+For complete technical and scientific details, refer to the reports:
+- [`reports/instructor_change_audit.md`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/reports/instructor_change_audit.md): Complete audit of previous oracle clustering and rollback plan.
+- [`reports/manuscript_change_map.md`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/reports/manuscript_change_map.md): Section-by-section LaTeX manuscript updates and equation replacements.
+- [`reports/equation_to_code_mapping.md`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/reports/equation_to_code_mapping.md): Precise source line mapping for Equations (1) to (32).
+- [`reports/validation.md`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/reports/validation.md): Execution logs for all 34 acceptance, regression, and sanity tests.
+- [`reports/experiments_and_results.md`](file:///Users/pratik/Desktop/TF_MAPPO_Multi-UAV/reports/experiments_and_results.md): Route quality analysis, convergence tables, and supervisor modeling notes.
+
+---
+
+## Platform Support & Troubleshooting
+
+- **macOS / Linux / Windows**: Pure Python/PyTorch codebase without OS-specific C extensions.
+- **Apple Silicon (M1/M2/M3/M4)**: Compatible with macOS ARM64; PyTorch CPU/MPS tensor pin-memory guards are active to prevent SIGSEGV.
+- **Matplotlib Font Cache**: Set `export MPLCONFIGDIR=/tmp/matplotlib_cache` on sandboxed or headless systems.

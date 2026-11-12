@@ -1,0 +1,6 @@
+Method,Completion_Ratio_Pct,Avg_Latency_s,Fleet_Energy_kJ,Trajectory_km,P1_Cost
+Proposed,79.52,1.455,333.91,25.98,0.555
+Standard MAPPO,24.20,1.574,273.59,5.23,0.649
+IPPO,72.13,1.376,388.70,15.31,0.590
+Greedy EDF,68.19,1.427,203.76,0.00,0.485
+Random,33.85,1.718,706.15,25.01,0.947

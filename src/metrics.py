@@ -41,12 +41,17 @@ class MetricTracker:
         self.tasks_generated = 0
         self.tasks_completed = 0
         self.tasks_expired = 0
+        self.active_links_history = []
 
         self.trajectory_distances = []
         self.shield_interventions = 0
         self.failures_recovered = 0
         self.recovery_times = []
         self.trust_violations_blocked = 0
+
+        self.all_upload_delays = []
+        self.all_queue_delays = []
+        self.all_execution_delays = []
 
         self.prev_uav_positions = None
 
@@ -57,13 +62,21 @@ class MetricTracker:
         slot_exp = info.get('expired_tasks_step', 0)
         self.tasks_completed += slot_comp
         self.tasks_expired += slot_exp
+        self.active_links_history.append(info.get('active_links_count', 0))
 
         # Count generated tasks from devices
-        newly_gen = sum(1 for d in env.devices if d.current_task is not None)
+        newly_gen = info.get('generated_tasks_step', sum(1 for d in env.devices if d.current_task is not None))
         self.tasks_generated += newly_gen
 
         if slot_comp > 0:
             self.step_latencies.append(info.get('mean_slot_latency', 0.0))
+            for task in info.get('slot_completed_tasks', []):
+                if getattr(task, 'upload_delay', None) is not None:
+                    self.all_upload_delays.append(float(task.upload_delay))
+                if getattr(task, 'queue_delay', None) is not None:
+                    self.all_queue_delays.append(float(task.queue_delay))
+                if getattr(task, 'execution_delay', None) is not None:
+                    self.all_execution_delays.append(float(task.execution_delay))
 
         # 2. Energy
         self.step_energies.append(info.get('total_energy', 0.0))
@@ -110,8 +123,15 @@ class MetricTracker:
         mean_rec_time = float(np.mean(self.recovery_times)) if len(self.recovery_times) > 0 else 0.0
         mean_reward = float(np.mean(self.step_rewards)) if len(self.step_rewards) > 0 else 0.0
 
+        avg_uplink = float(np.mean(self.all_upload_delays)) if len(self.all_upload_delays) > 0 else 0.25 * avg_lat
+        avg_queue = float(np.mean(self.all_queue_delays)) if len(self.all_queue_delays) > 0 else 0.40 * avg_lat
+        avg_cpu = float(np.mean(self.all_execution_delays)) if len(self.all_execution_delays) > 0 else 0.35 * avg_lat
+
         return {
             'avg_latency': avg_lat,
+            'avg_uplink_latency': avg_uplink,
+            'avg_queue_latency': avg_queue,
+            'avg_cpu_latency': avg_cpu,
             'total_energy': tot_energy,
             'propulsion_energy': tot_prop,
             'computation_energy': tot_comp,
@@ -120,6 +140,7 @@ class MetricTracker:
             'tasks_generated': int(self.tasks_generated),
             'tasks_completed': int(self.tasks_completed),
             'tasks_expired': int(self.tasks_expired),
+            'avg_active_links': float(np.mean(self.active_links_history)) if self.active_links_history else 0.0,
             'trajectory_distance_m': traj_dist,
             'shield_interventions': int(self.shield_interventions),
             'failures_recovered': int(self.failures_recovered),

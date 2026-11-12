@@ -1,0 +1,44 @@
+network:
+  area_width_m: 500
+  area_height_m: 500
+  num_iot_devices: 80
+  num_uavs: 4
+  default_fixed_reference_C: 4
+  cluster_count_mode: auto_geometry   # alternatively fixed
+  cluster_count_candidates: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  cluster_init: k-means++
+  cluster_n_init: 20
+  cluster_max_iter: 300
+  cluster_tol: 1.0e-4
+  cluster_random_state: 42
+  max_simultaneous_uplinks_per_uav: 3
+  delta_t_seconds: 2
+  steps_per_episode: 300
+training:
+  smoke_joint_steps: 500
+  pilot_joint_steps: 30000
+  full_joint_steps_per_seed: 900000
+  independent_training_seeds: 5
+  rollout_joint_steps: 2048
+  ppo_epochs: 5
+  minibatch_size: 256
+  actor_lr: 3.0e-4
+  critic_lr: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  ppo_clip: 0.15
+  hidden_layers: [256, 256]
+evaluation:
+  m_sensitivity: [4, 5, 6, 8]
+  c_sensitivity_with_m4: [2, 4, 6, 8, 12]
+  compare_auto_selected_C: true
+  geometry_selection_candidates: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  validation_scenarios_per_policy_seed: 15    # checkpoint/hyperparameter/C selection ONLY
+  heldout_test_scenarios_per_policy_seed: 30  # frozen policies ONLY
+  primary_algorithm_comparison_C: 4
+  compare_baselines_at_validated_C: true
+  model_cluster_interaction_methods: [proposed_masked_mappo, standard_mappo, greedy_eligible_edf]
+  selection_rule: mean_validation_P1_subject_to_feasibility
+  tie_breaks: [higher_on_time_completion, lower_energy, smaller_C]
+  k_comm_sensitivity: [1, 2, 3, 4, 5]
+

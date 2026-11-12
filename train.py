@@ -68,6 +68,7 @@ def train_single_seed(args, seed, method="MAPPO"):
     best_reward = -1e9
     start_time = time.time()
     progress_records = []
+    last_summary = None
 
     while global_step < args.total_steps:
         # Collect rollout of MAPPO_ROLLOUT_LENGTH steps
@@ -109,6 +110,7 @@ def train_single_seed(args, seed, method="MAPPO"):
         # Logging & Checkpointing
         if global_step % _cfg.LOG_INTERVAL < _cfg.MAPPO_ROLLOUT_LENGTH:
             summary = tracker.get_episode_summary()
+            last_summary = summary
             ep_reward = summary.get('mean_step_reward', 0.0)
             elapsed = time.time() - start_time
             sps = global_step / max(elapsed, 1.0)
@@ -135,6 +137,8 @@ def train_single_seed(args, seed, method="MAPPO"):
             if ep_reward > best_reward:
                 best_reward = ep_reward
                 agent.save(os.path.join(out_dir, "best_model.pt"))
+
+            tracker.reset()
 
     agent.save(os.path.join(out_dir, "final_model.pt"))
     tracker.export_reward_components_csv(os.path.join(out_dir, "reward_components.csv"))
@@ -180,7 +184,7 @@ def train_single_seed(args, seed, method="MAPPO"):
         except Exception as e:
             print(f"  [Warning] Plotting failed: {e}")
 
-    final_summary = tracker.get_episode_summary()
+    final_summary = last_summary if last_summary is not None else tracker.get_episode_summary()
     with open(os.path.join(out_dir, "summary.json"), "w") as f:
         json.dump(final_summary, f, indent=4)
     print(f"  Finished Seed {seed}! Final Completion Ratio: {final_summary['completion_ratio_pct']:.2f}%\n")

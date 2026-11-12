@@ -116,10 +116,12 @@ class RolloutBuffer:
 
         def _pin(arr):
             t = torch.from_numpy(arr)
-            try:
-                return t.pin_memory()
-            except Exception:
-                return t
+            if torch.cuda.is_available():
+                try:
+                    return t.pin_memory()
+                except Exception:
+                    return t
+            return t
 
         obs_t          = _pin(obs_flat)
         states_t       = _pin(states_flat)

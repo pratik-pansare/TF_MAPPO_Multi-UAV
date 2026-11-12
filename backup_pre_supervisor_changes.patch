@@ -1,0 +1,466 @@
+diff --git a/docs/RESULTS_SUMMARY.md b/docs/RESULTS_SUMMARY.md
+index 84952a7..5dcaa31 100644
+--- a/docs/RESULTS_SUMMARY.md
++++ b/docs/RESULTS_SUMMARY.md
+@@ -12,11 +12,11 @@ The benchmark comparison was executed using `scripts/run_benchmarks.py` across f
+ 
+ | Method | Average Latency (s) | 95% CI (s) | Total Energy (J) | 95% CI (J) | Deadline Completion (%) | 95% CI (%) |
+ |---|---|---|---|---|---|---|
+-| **TF-MAPPO (Proposed)** | 2.141 | $\pm$ 0.140 | 53,084.7 | $\pm$ 4,583.6 | 3.22% | $\pm$ 1.40% |
+-| **MAPPO-NoMask** | 2.171 | $\pm$ 0.008 | 53,012.0 | $\pm$ 3,873.9 | 2.01% | $\pm$ 0.75% |
+-| **MAPPO-NoTrust** | 2.132 | $\pm$ 0.228 | 49,338.1 | $\pm$ 4,088.8 | 1.80% | $\pm$ 0.23% |
+-| **Dynamic Greedy** | 2.199 | $\pm$ 0.100 | 8,482.8 | $\pm$ 0.0 | 11.59% | $\pm$ 0.17% |
+-| **Local Only** | 0.000* | $\pm$ 0.000 | 8,424.6 | $\pm$ 0.0 | 0.00%* | $\pm$ 0.00% |
++| **TF-MAPPO (Proposed)** | 1.806 | $\pm$ 0.055 | 281,740.4 | $\pm$ 12,337.9 | 11.30% | $\pm$ 0.98% |
++| **MAPPO-NoMask** | 1.790 | $\pm$ 0.039 | 278,688.6 | $\pm$ 5,282.1 | 11.15% | $\pm$ 0.49% |
++| **MAPPO-NoTrust** | 1.791 | $\pm$ 0.062 | 268,762.9 | $\pm$ 8,521.8 | 10.98% | $\pm$ 1.02% |
++| **Dynamic Greedy** | 2.077 | $\pm$ 0.007 | 84,820.4 | $\pm$ 9.4 | 18.93% | $\pm$ 0.31% |
++| **Local Only** | 0.000* | $\pm$ 0.000 | 84,246.3 | $\pm$ 0.0 | 0.00%* | $\pm$ 0.00% |
+ 
+ *\*Note: Under Local-Only baseline, no UAV MEC offloading occurs; tasks that exceed the local device deadline of [1.0, 3.0] s on 0.5 GHz local microcontrollers expire unserved.*
+ 
+diff --git a/outputs/Milestone_4_baselines/benchmark_results.csv b/outputs/Milestone_4_baselines/benchmark_results.csv
+index f601bb6..d2cfef9 100644
+--- a/outputs/Milestone_4_baselines/benchmark_results.csv
++++ b/outputs/Milestone_4_baselines/benchmark_results.csv
+@@ -1,6 +1,6 @@
+ method,latency_s_mean,latency_s_ci,energy_j_mean,energy_j_ci,completion_ratio_mean,completion_ratio_ci,flight_dist_m_mean
+-MAPPO,0.0,0.0,123547.46700543824,5463.202763453748,0.0,0.0,6327.069226770608
+-MAPPO_NoMask,1.114251379849829,1.0920376529423783,126398.91392473767,4669.517056843138,0.04766818331451256,0.06730357980863154,6139.330616129379
+-MAPPO_NoTrust,1.4759037449385541,0.2245500151132678,119713.48927267607,5859.596887441882,0.05699362386293071,0.0005468663126154485,5464.3015135769865
+-Greedy,2.2537883283089872,0.016812570902381297,42413.15297160789,1.7639999999980986,11.760023789462833,0.2827666862203231,0.0
+-LocalOnly,0.0,0.0,42123.12797160788,0.0,0.0,0.0,0.0
++MAPPO,1.806214292314266,0.05467253613932571,281740.44458544406,12337.899282685863,11.30428641766422,0.9757542273312929,16422.29945969144
++MAPPO_NoMask,1.7901852762449313,0.03933450598560437,278688.569371133,5282.127454239065,11.147694385095287,0.49431453689039423,16317.91871223537
++MAPPO_NoTrust,1.7912981306691536,0.061755035661307925,268762.94608481333,8521.845665480194,10.977077468994587,1.0210211118829906,15919.885930224144
++Greedy,2.0772850458362004,0.006676457673521977,84820.38610321583,9.374796506301145,18.933291285720497,0.31184073026228515,0.0
++LocalOnly,0.0,0.0,84246.25594321574,0.0,0.0,0.0,0.0
+diff --git a/outputs/Milestone_5_final_evaluation/fig10_weight_sensitivity.pdf b/outputs/Milestone_5_final_evaluation/fig10_weight_sensitivity.pdf
+index b1a7f99..517e9e0 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig10_weight_sensitivity.pdf and b/outputs/Milestone_5_final_evaluation/fig10_weight_sensitivity.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig1_convergence.pdf b/outputs/Milestone_5_final_evaluation/fig1_convergence.pdf
+index 9eddbd6..c375b4e 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig1_convergence.pdf and b/outputs/Milestone_5_final_evaluation/fig1_convergence.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig1_convergence.png b/outputs/Milestone_5_final_evaluation/fig1_convergence.png
+index afec3fa..b7d9ab8 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig1_convergence.png and b/outputs/Milestone_5_final_evaluation/fig1_convergence.png differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig2_energy_comparison.pdf b/outputs/Milestone_5_final_evaluation/fig2_energy_comparison.pdf
+index ef9b1f7..8d36563 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig2_energy_comparison.pdf and b/outputs/Milestone_5_final_evaluation/fig2_energy_comparison.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig3_latency_breakdown.pdf b/outputs/Milestone_5_final_evaluation/fig3_latency_breakdown.pdf
+index 15584aa..663f8f3 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig3_latency_breakdown.pdf and b/outputs/Milestone_5_final_evaluation/fig3_latency_breakdown.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig4_completion_ratio.pdf b/outputs/Milestone_5_final_evaluation/fig4_completion_ratio.pdf
+index a5bd8a7..47d6ef5 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig4_completion_ratio.pdf and b/outputs/Milestone_5_final_evaluation/fig4_completion_ratio.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig5_scalability_N.pdf b/outputs/Milestone_5_final_evaluation/fig5_scalability_N.pdf
+index 66d9aa3..ade3b12 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig5_scalability_N.pdf and b/outputs/Milestone_5_final_evaluation/fig5_scalability_N.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig6_scalability_M.pdf b/outputs/Milestone_5_final_evaluation/fig6_scalability_M.pdf
+index 6a07a8e..38b93d7 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig6_scalability_M.pdf and b/outputs/Milestone_5_final_evaluation/fig6_scalability_M.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig7_trajectories_clusters.pdf b/outputs/Milestone_5_final_evaluation/fig7_trajectories_clusters.pdf
+index 88067ad..a61deaa 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig7_trajectories_clusters.pdf and b/outputs/Milestone_5_final_evaluation/fig7_trajectories_clusters.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig8_fault_timeline.pdf b/outputs/Milestone_5_final_evaluation/fig8_fault_timeline.pdf
+index e47504c..0dc9a07 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig8_fault_timeline.pdf and b/outputs/Milestone_5_final_evaluation/fig8_fault_timeline.pdf differ
+diff --git a/outputs/Milestone_5_final_evaluation/fig9_ablation_study.pdf b/outputs/Milestone_5_final_evaluation/fig9_ablation_study.pdf
+index 840dd92..16c931c 100644
+Binary files a/outputs/Milestone_5_final_evaluation/fig9_ablation_study.pdf and b/outputs/Milestone_5_final_evaluation/fig9_ablation_study.pdf differ
+diff --git a/results/logs/MAPPO_multi_seed_results.json b/results/logs/MAPPO_multi_seed_results.json
+index 08af311..9965b0c 100644
+--- a/results/logs/MAPPO_multi_seed_results.json
++++ b/results/logs/MAPPO_multi_seed_results.json
+@@ -1,35 +1,35 @@
+ {
+     "method": "MAPPO",
+     "num_seeds": 1,
+-    "total_steps_per_seed": 100000,
++    "total_steps_per_seed": 150000,
+     "metrics_ci95": {
+         "latency_s": {
+-            "mean": 1.882062764721792,
++            "mean": 1.5666564839735801,
+             "std": 0.0,
+             "ci95": 0.0,
+-            "low_ci": 1.882062764721792,
+-            "high_ci": 1.882062764721792
++            "low_ci": 1.5666564839735801,
++            "high_ci": 1.5666564839735801
+         },
+         "energy_j": {
+-            "mean": 130599998.3146285,
++            "mean": 3268481.4690967724,
+             "std": 0.0,
+             "ci95": 0.0,
+-            "low_ci": 130599998.3146285,
+-            "high_ci": 130599998.3146285
++            "low_ci": 3268481.4690967724,
++            "high_ci": 3268481.4690967724
+         },
+         "completion_ratio_pct": {
+-            "mean": 0.414293460129773,
++            "mean": 3.129656377202948,
+             "std": 0.0,
+             "ci95": 0.0,
+-            "low_ci": 0.414293460129773,
+-            "high_ci": 0.414293460129773
++            "low_ci": 3.129656377202948,
++            "high_ci": 3.129656377202948
+         },
+         "trajectory_distance_m": {
+-            "mean": 3281847.994744467,
++            "mean": 124372.912732422,
+             "std": 0.0,
+             "ci95": 0.0,
+-            "low_ci": 3281847.994744467,
+-            "high_ci": 3281847.994744467
++            "low_ci": 124372.912732422,
++            "high_ci": 124372.912732422
+         }
+     }
+ }
+\ No newline at end of file
+diff --git a/results/logs/benchmark_comparison.json b/results/logs/benchmark_comparison.json
+index 0108a79..2c2c232 100644
+--- a/results/logs/benchmark_comparison.json
++++ b/results/logs/benchmark_comparison.json
+@@ -1,49 +1,49 @@
+ [
+     {
+         "method": "MAPPO",
+-        "latency_s_mean": 0.0,
+-        "latency_s_ci": 0.0,
+-        "energy_j_mean": 123547.46700543824,
+-        "energy_j_ci": 5463.202763453748,
+-        "completion_ratio_mean": 0.0,
+-        "completion_ratio_ci": 0.0,
+-        "flight_dist_m_mean": 6327.069226770608
++        "latency_s_mean": 1.806214292314266,
++        "latency_s_ci": 0.05467253613932571,
++        "energy_j_mean": 281740.44458544406,
++        "energy_j_ci": 12337.899282685863,
++        "completion_ratio_mean": 11.30428641766422,
++        "completion_ratio_ci": 0.9757542273312929,
++        "flight_dist_m_mean": 16422.29945969144
+     },
+     {
+         "method": "MAPPO_NoMask",
+-        "latency_s_mean": 1.114251379849829,
+-        "latency_s_ci": 1.0920376529423783,
+-        "energy_j_mean": 126398.91392473767,
+-        "energy_j_ci": 4669.517056843138,
+-        "completion_ratio_mean": 0.04766818331451256,
+-        "completion_ratio_ci": 0.06730357980863154,
+-        "flight_dist_m_mean": 6139.330616129379
++        "latency_s_mean": 1.7901852762449313,
++        "latency_s_ci": 0.03933450598560437,
++        "energy_j_mean": 278688.569371133,
++        "energy_j_ci": 5282.127454239065,
++        "completion_ratio_mean": 11.147694385095287,
++        "completion_ratio_ci": 0.49431453689039423,
++        "flight_dist_m_mean": 16317.91871223537
+     },
+     {
+         "method": "MAPPO_NoTrust",
+-        "latency_s_mean": 1.4759037449385541,
+-        "latency_s_ci": 0.2245500151132678,
+-        "energy_j_mean": 119713.48927267607,
+-        "energy_j_ci": 5859.596887441882,
+-        "completion_ratio_mean": 0.05699362386293071,
+-        "completion_ratio_ci": 0.0005468663126154485,
+-        "flight_dist_m_mean": 5464.3015135769865
++        "latency_s_mean": 1.7912981306691536,
++        "latency_s_ci": 0.061755035661307925,
++        "energy_j_mean": 268762.94608481333,
++        "energy_j_ci": 8521.845665480194,
++        "completion_ratio_mean": 10.977077468994587,
++        "completion_ratio_ci": 1.0210211118829906,
++        "flight_dist_m_mean": 15919.885930224144
+     },
+     {
+         "method": "Greedy",
+-        "latency_s_mean": 2.2537883283089872,
+-        "latency_s_ci": 0.016812570902381297,
+-        "energy_j_mean": 42413.15297160789,
+-        "energy_j_ci": 1.7639999999980986,
+-        "completion_ratio_mean": 11.760023789462833,
+-        "completion_ratio_ci": 0.2827666862203231,
++        "latency_s_mean": 2.0772850458362004,
++        "latency_s_ci": 0.006676457673521977,
++        "energy_j_mean": 84820.38610321583,
++        "energy_j_ci": 9.374796506301145,
++        "completion_ratio_mean": 18.933291285720497,
++        "completion_ratio_ci": 0.31184073026228515,
+         "flight_dist_m_mean": 0.0
+     },
+     {
+         "method": "LocalOnly",
+         "latency_s_mean": 0.0,
+         "latency_s_ci": 0.0,
+-        "energy_j_mean": 42123.12797160788,
++        "energy_j_mean": 84246.25594321574,
+         "energy_j_ci": 0.0,
+         "completion_ratio_mean": 0.0,
+         "completion_ratio_ci": 0.0,
+diff --git a/results/test_results/paper_100_episodes/metrics.json b/results/test_results/paper_100_episodes/metrics.json
+index 9d2c77d..c565090 100644
+--- a/results/test_results/paper_100_episodes/metrics.json
++++ b/results/test_results/paper_100_episodes/metrics.json
+@@ -3,46 +3,46 @@
+     "max_steps_per_episode": 500,
+     "metrics": {
+         "reward": {
+-            "mean": -300.2566667166352,
+-            "std": 6.0807730254044206,
+-            "ci95": 1.1918315129792663,
+-            "low_ci": -301.4484982296145,
+-            "high_ci": -299.06483520365595
++            "mean": 353.0006940979781,
++            "std": 300.2918543651379,
++            "ci95": 58.857203455567024,
++            "low_ci": 294.1434906424111,
++            "high_ci": 411.8578975535451
+         },
+         "task_latency_s": {
+-            "mean": 0.0012272657955247567,
+-            "std": 0.0021427916415099352,
+-            "ci95": 0.00041998716173594736,
+-            "low_ci": 0.0008072786337888093,
+-            "high_ci": 0.001647252957260704
++            "mean": 1.7833378213779811,
++            "std": 0.08866915719672276,
++            "ci95": 0.017379154810557663,
++            "low_ci": 1.7659586665674234,
++            "high_ci": 1.8007169761885389
+         },
+         "uav_energy_j": {
+-            "mean": 1010.5490182068405,
+-            "std": 22.943917194908103,
+-            "ci95": 4.4970077702019875,
+-            "low_ci": 1006.0520104366385,
+-            "high_ci": 1015.0460259770425
++            "mean": 1451.1763130994755,
++            "std": 85.25728087457718,
++            "ci95": 16.710427051417128,
++            "low_ci": 1434.4658860480583,
++            "high_ci": 1467.8867401508926
+         },
+         "completion_ratio_pct": {
+-            "mean": 0.0016292085857325953,
+-            "std": 0.0030453220686298492,
+-            "ci95": 0.0005968831254514504,
+-            "low_ci": 0.001032325460281145,
+-            "high_ci": 0.0022260917111840456
++            "mean": 4.1789786734846274,
++            "std": 1.012799118925262,
++            "ci95": 0.19850862730935134,
++            "low_ci": 3.980470046175276,
++            "high_ci": 4.377487300793979
+         },
+         "trajectory_distance_m": {
+-            "mean": 6756.12670731989,
+-            "std": 1185.5146828988711,
+-            "ci95": 232.36087784817875,
+-            "low_ci": 6523.765829471711,
+-            "high_ci": 6988.487585168068
++            "mean": 29192.193153531218,
++            "std": 4542.114231421341,
++            "ci95": 890.2543893585829,
++            "low_ci": 28301.938764172635,
++            "high_ci": 30082.4475428898
+         },
+         "uav_eligibility_pct": {
+-            "mean": 98.97880000000004,
+-            "std": 1.1361953879486715,
+-            "ci95": 0.2226942960379396,
+-            "low_ci": 98.75610570396209,
+-            "high_ci": 99.20149429603798
++            "mean": 93.45920000000025,
++            "std": 4.173728241553654,
++            "ci95": 0.8180507353445161,
++            "low_ci": 92.64114926465574,
++            "high_ci": 94.27725073534477
+         }
+     }
+ }
+\ No newline at end of file
+diff --git a/results/test_results/paper_100_episodes/plots/paper_100_episodes_summary.png b/results/test_results/paper_100_episodes/plots/paper_100_episodes_summary.png
+index 809fb9c..b13e99b 100644
+Binary files a/results/test_results/paper_100_episodes/plots/paper_100_episodes_summary.png and b/results/test_results/paper_100_episodes/plots/paper_100_episodes_summary.png differ
+diff --git a/run_100_episodes.py b/run_100_episodes.py
+index 5c3c040..7a7dd97 100644
+--- a/run_100_episodes.py
++++ b/run_100_episodes.py
+@@ -131,11 +131,15 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
+             step_comp = info.get('completed_tasks_step', info.get('completed_tasks', 0))
+             step_exp = info.get('expired_tasks_step', info.get('deadline_violations', 0))
+             ep_tasks_completed += step_comp
+-            new_gen = sum(1 for d in env.devices if d.current_task is not None)
+-            ep_tasks_generated += max(step_comp + step_exp, new_gen)
++            step_gen = info.get('generated_tasks_step', 0)
++            ep_tasks_generated += step_gen
+ 
+             obs, state = next_obs, next_state
+ 
++        total_gen_recorded = sum(len(d.all_tasks) for d in env.devices)
++        if total_gen_recorded > 0:
++            ep_tasks_generated = total_gen_recorded
++
+         avg_ep_latency = ep_latency_sum / max_steps_per_episode
+         avg_ep_energy = ep_energy_sum / max_steps_per_episode
+         completion_ratio = ep_tasks_completed / max(ep_tasks_generated, 1)
+diff --git a/src/env.py b/src/env.py
+index bdc3a59..cd6d2e4 100755
+--- a/src/env.py
++++ b/src/env.py
+@@ -298,7 +298,7 @@ class MultiUAVMECEnv:
+                 cluster_to_uav[uav.assigned_cluster - 1] = m
+ 
+         # Identify generated tasks per cluster
+-        tasks_to_admit = {m: [] for m in range(self.num_uavs)}
++        candidate_tasks = {m: [] for m in range(self.num_uavs)}
+         devices_with_task = [dev for dev in self.devices if dev.current_task is not None]
+ 
+         for dev in devices_with_task:
+@@ -306,23 +306,43 @@ class MultiUAVMECEnv:
+             c_id = dev.cluster_id
+             if c_id in cluster_to_uav:
+                 serving_uav_idx = cluster_to_uav[c_id]
+-                tasks_to_admit[serving_uav_idx].append((dev, task))
++                candidate_tasks[serving_uav_idx].append((dev, task))
+             else:
+                 # No eligible UAV serving this cluster: task rejected
+                 task.status = TaskStatus.REJECTED
+ 
+-        # Upload admitted tasks over orthogonal bandwidth
+-        for m, dev_task_list in tasks_to_admit.items():
++        # Deadline-feasibility admission control (Constraint C6 & C11)
++        tasks_to_admit = {m: [] for m in range(self.num_uavs)}
++        for m, dev_task_list in candidate_tasks.items():
+             if len(dev_task_list) == 0:
+                 continue
+             uav = self.uavs[m]
+-            k_tasks = len(dev_task_list)
+-            ortho_bw = uav.bandwidth / max(1, k_tasks)
++            # Prioritize earliest deadline tasks (EDF admission)
++            dev_task_list.sort(key=lambda item: item[1].deadline)
++
++            proj_backlog = self.computation_manager.queues[m]
++            k_cand = len(dev_task_list)
++            ortho_bw = uav.bandwidth / max(1, k_cand)
+ 
+             for dev, task in dev_task_list:
+                 t_up = self.channel_model.compute_uploading_delay(
+                     task.data_size, dev.position, uav.position, dev.tx_power, ortho_bw
+                 )
++                t_exe = task.workload / uav.cpu_freq
++                t_que = proj_backlog / uav.cpu_freq
++                t_est_tot = t_up + t_que + t_exe
++
++                if t_est_tot <= task.deadline:
++                    # Feasible under deadline: admit
++                    tasks_to_admit[m].append((dev, task, t_up))
++                    proj_backlog += task.workload
++                else:
++                    # Infeasible: reject to prevent queue congestion
++                    task.status = TaskStatus.REJECTED
++
++        # Upload admitted tasks over orthogonal bandwidth
++        for m, admitted_list in tasks_to_admit.items():
++            for dev, task, t_up in admitted_list:
+                 self.computation_manager.admit_task(
+                     uav_id=m,
+                     task=task,
+@@ -373,8 +393,11 @@ class MultiUAVMECEnv:
+         # -------------------------------------------------------------
+         # 6. Generate Stochastic Tasks for Next Slot
+         # -------------------------------------------------------------
++        new_tasks_generated = 0
+         for dev in self.devices:
+-            dev.generate_task(slot=self.current_slot, rng=self.rng, current_time=self.global_time)
++            new_task = dev.generate_task(slot=self.current_slot, rng=self.rng, current_time=self.global_time)
++            if new_task is not None:
++                new_tasks_generated += 1
+ 
+         # -------------------------------------------------------------
+         # 7. Problem P1 Multi-Objective Reward Calculation
+@@ -384,11 +407,16 @@ class MultiUAVMECEnv:
+         T_ref = 2.0
+ 
+         completed_latencies = [t.total_latency for t in slot_completed]
+-        mean_slot_latency = float(np.mean(completed_latencies)) if len(completed_latencies) > 0 else 0.0
++        if len(completed_latencies) > 0:
++            mean_slot_latency = float(np.mean(completed_latencies))
++        else:
++            mean_slot_latency = T_ref  # Default to max penalty when zero tasks are served (Section 6)
++
++        unserved_count = sum(1 for d in devices_with_task if not d.served_this_slot)
+ 
+         r_energy = -OMEGA_E * (total_fleet_energy / E_ref)
+         r_latency = -OMEGA_T * (mean_slot_latency / T_ref)
+-        r_completion = 0.5 * len(slot_completed) - 0.2 * len(slot_expired)
++        r_completion = 0.8 * len(slot_completed) - 0.2 * len(slot_expired) - 0.05 * unserved_count
+         r_shield_pen = -0.1 if shield_intervened else 0.0
+ 
+         step_reward = r_energy + r_latency + r_completion + r_shield_pen
+@@ -409,6 +437,7 @@ class MultiUAVMECEnv:
+         info = {
+             'completed_tasks_step': len(slot_completed),
+             'expired_tasks_step': len(slot_expired),
++            'generated_tasks_step': new_tasks_generated,
+             'mean_slot_latency': mean_slot_latency,
+             'total_energy': total_fleet_energy,
+             'propulsion_energy': propulsion_energy,
+diff --git a/src/metrics.py b/src/metrics.py
+index d6872e3..5ce6343 100755
+--- a/src/metrics.py
++++ b/src/metrics.py
+@@ -59,7 +59,7 @@ class MetricTracker:
+         self.tasks_expired += slot_exp
+ 
+         # Count generated tasks from devices
+-        newly_gen = sum(1 for d in env.devices if d.current_task is not None)
++        newly_gen = info.get('generated_tasks_step', sum(1 for d in env.devices if d.current_task is not None))
+         self.tasks_generated += newly_gen
+ 
+         if slot_comp > 0:
+diff --git a/train.py b/train.py
+index 290f8bb..f523e3c 100755
+--- a/train.py
++++ b/train.py
+@@ -68,6 +68,7 @@ def train_single_seed(args, seed, method="MAPPO"):
+     best_reward = -1e9
+     start_time = time.time()
+     progress_records = []
++    last_summary = None
+ 
+     while global_step < args.total_steps:
+         # Collect rollout of MAPPO_ROLLOUT_LENGTH steps
+@@ -109,6 +110,7 @@ def train_single_seed(args, seed, method="MAPPO"):
+         # Logging & Checkpointing
+         if global_step % _cfg.LOG_INTERVAL < _cfg.MAPPO_ROLLOUT_LENGTH:
+             summary = tracker.get_episode_summary()
++            last_summary = summary
+             ep_reward = summary.get('mean_step_reward', 0.0)
+             elapsed = time.time() - start_time
+             sps = global_step / max(elapsed, 1.0)
+@@ -136,6 +138,8 @@ def train_single_seed(args, seed, method="MAPPO"):
+                 best_reward = ep_reward
+                 agent.save(os.path.join(out_dir, "best_model.pt"))
+ 
++            tracker.reset()
++
+     agent.save(os.path.join(out_dir, "final_model.pt"))
+     tracker.export_reward_components_csv(os.path.join(out_dir, "reward_components.csv"))
+ 
+@@ -180,7 +184,7 @@ def train_single_seed(args, seed, method="MAPPO"):
+         except Exception as e:
+             print(f"  [Warning] Plotting failed: {e}")
+ 
+-    final_summary = tracker.get_episode_summary()
++    final_summary = last_summary if last_summary is not None else tracker.get_episode_summary()
+     with open(os.path.join(out_dir, "summary.json"), "w") as f:
+         json.dump(final_summary, f, indent=4)
+     print(f"  Finished Seed {seed}! Final Completion Ratio: {final_summary['completion_ratio_pct']:.2f}%\n")

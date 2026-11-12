@@ -36,6 +36,10 @@ UAV_PROFILES = [
 ]
 NUM_UAV_CAPABILITY_DIMS = 5
 
+# Altitude limits
+H_MIN = 80.0
+H_MAX = 120.0
+
 # Rotary-Wing Propulsion Model Parameters (Paper Section III.D)
 P1_BLADE            = 79.86  # Blade profile power constant
 P2_INDUCED          = 88.63  # Induced power constant
@@ -84,7 +88,13 @@ CERTIFICATE_DURATION   = 1000    # Certificate duration (slots, valid for episod
 FAULT_PROBABILITY      = 0.001   # Per-slot UAV operational fault probability
 
 MIN_BATTERY_RESERVE    = 50.0    # Reserve energy threshold (Joules)
-MAX_SERVICE_RADIUS     = 600.0   # Maximum UAV service coverage radius (m)
+MAX_SERVICE_RADIUS     = 250.0   # Physical communication service coverage radius R_m_srv (m)
+R_MIN_UPLINK           = 1e5     # Minimum viable uplink transmission rate (100 kbps)
+
+# Radio Concurrency Constraints (Supervisor Instruction 3)
+K_COMM_DEFAULT         = 3       # Max simultaneous active IoT communication links per UAV K_m^comm
+MAX_CANDIDATE_POOL     = 8       # Padded candidate pool size per UAV for offloading scheduling head
+NETWORK_WIDE_K_COMM    = None    # Optional global fleet concurrency cap (Flagged for supervisor confirmation)
 
 # ============================================================
 # 6. TIME & MOBILITY MODEL
@@ -129,7 +139,7 @@ ALPHA_LATENCY          = 0.5     # Latency weight
 BETA_ENERGY            = 0.5     # Energy weight
 OMEGA_E                = 0.5     # Energy weight in Objective P1
 OMEGA_T                = 0.5     # Latency weight in Objective P1
-LAMBDA_W               = 0.5     # Workload coefficient in IoT clustering
+LAMBDA_W               = 0.5     # Deprecated: Workload coefficient retained for legacy ablation only
 
 # Model Feature Flags
 USE_DIFFUSION          = False   # Disabled: Gaussian Action-Masked Actor used

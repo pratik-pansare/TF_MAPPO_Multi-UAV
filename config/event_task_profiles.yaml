@@ -1,0 +1,132 @@
+# ==============================================================================
+# Environment-Dependent Task Generation & Application Profiles
+# ==============================================================================
+# Target Journal: IEEE Internet of Things Journal
+# Paper: Joint Task Offloading and Adaptive Trajectory Optimization in
+#        Trust- and Fault-Aware Multi-UAV Edge IoT Networks
+# Provenance: Synthetic realistic IoT benchmark profiles calibrated against
+#             standard edge computing benchmarks (Edge-AIBench / Alibaba trace).
+# ==============================================================================
+
+version: "2.0"
+metadata:
+  description: "Causal, profile-driven task generation configurations across environmental modes"
+  units:
+    data_size: "bits"
+    cycles_per_bit: "CPU cycles / bit"
+    deadline: "seconds"
+    generation_probability: "per-slot probability [0, 1]"
+
+# ------------------------------------------------------------------------------
+# 1. Environmental Modes & Dynamic Triggers
+# ------------------------------------------------------------------------------
+environmental_modes:
+  ROUTINE:
+    description: "Standard background municipal / industrial sensing under nominal conditions"
+    base_generation_rate: 0.20
+    data_size_range_bits: [300000, 800000]       # 0.3 - 0.8 Mbits
+    cycles_per_bit_range: [250, 450]             # 250 - 450 cycles/bit
+    deadline_range_s: [2.0, 4.0]                 # 2.0 - 4.0 seconds
+    priority_level: 1
+
+  HOTSPOT:
+    description: "Localized intense activity (e.g., traffic bottleneck, localized security alert)"
+    base_generation_rate: 0.75
+    data_size_range_bits: [1000000, 2200000]     # 1.0 - 2.2 Mbits
+    cycles_per_bit_range: [500, 800]             # 500 - 800 cycles/bit
+    deadline_range_s: [1.0, 2.2]                 # 1.0 - 2.2 seconds
+    priority_level: 2
+
+  EMERGENCY:
+    description: "Critical safety hazard (e.g., fire alarm, structural breach, toxic emission)"
+    base_generation_rate: 0.90
+    data_size_range_bits: [1500000, 2800000]     # 1.5 - 2.8 Mbits
+    cycles_per_bit_range: [600, 950]             # 600 - 950 cycles/bit
+    deadline_range_s: [0.8, 1.6]                 # 0.8 - 1.6 seconds
+    priority_level: 3
+
+  PERSISTENT_SHIFT:
+    description: "Long-term spatial shift of traffic demand across simulation epochs"
+    base_generation_rate: 0.50
+    data_size_range_bits: [800000, 1800000]      # 0.8 - 1.8 Mbits
+    cycles_per_bit_range: [400, 700]             # 400 - 700 cycles/bit
+    deadline_range_s: [1.2, 2.5]                 # 1.2 - 2.5 seconds
+    priority_level: 2
+
+# ------------------------------------------------------------------------------
+# 2. Device Class Profiles
+# ------------------------------------------------------------------------------
+device_classes:
+  ENVIRONMENTAL_SENSOR:
+    share_of_population: 0.40
+    nominal_tx_power_w: 0.1
+    local_cpu_freq_hz: 0.3e9
+    default_mode: "ROUTINE"
+
+  SURVEILLANCE_CAMERA:
+    share_of_population: 0.25
+    nominal_tx_power_w: 0.2
+    local_cpu_freq_hz: 0.8e9
+    default_mode: "HOTSPOT"
+
+  INDUSTRIAL_CONTROLLER:
+    share_of_population: 0.20
+    nominal_tx_power_w: 0.15
+    local_cpu_freq_hz: 0.6e9
+    default_mode: "ROUTINE"
+
+  SMART_METER:
+    share_of_population: 0.15
+    nominal_tx_power_w: 0.1
+    local_cpu_freq_hz: 0.4e9
+    default_mode: "ROUTINE"
+
+# ------------------------------------------------------------------------------
+# 3. Benchmark Scenarios
+# ------------------------------------------------------------------------------
+scenarios:
+  SCENARIO_A_ROUTINE:
+    name: "Scenario A: Routine Mixed Conditions"
+    description: "Baseline municipal operations across all clusters with normal stochastic task generation"
+    hotspots: []
+    emergency_events: []
+
+  SCENARIO_B_HOTSPOT:
+    name: "Scenario B: Localized Time-Varying Hotspot"
+    description: "Cluster 2 experiences intense event surge between t=50s and t=250s"
+    hotspots:
+      - cluster_id: 2
+        center: [150.0, -200.0]
+        radius_m: 180.0
+        start_slot: 50
+        end_slot: 250
+        surge_factor: 2.5
+
+  SCENARIO_C_MULTI_EVENT:
+    name: "Scenario C: Simultaneous Geographically Separated Events"
+    description: "Two distinct event hotspots emerge simultaneously at disparate regions"
+    hotspots:
+      - cluster_id: 1
+        center: [-250.0, 200.0]
+        radius_m: 150.0
+        start_slot: 80
+        end_slot: 300
+        surge_factor: 2.2
+      - cluster_id: 4
+        center: [300.0, 150.0]
+        radius_m: 160.0
+        start_slot: 120
+        end_slot: 350
+        surge_factor: 2.6
+
+  SCENARIO_D_STRESS_TEST:
+    name: "Scenario D: Persistent Shift & Intermittent Faults"
+    description: "Spatial demand migration combined with stochastic hardware availability interruptions"
+    hotspots:
+      - cluster_id: 3
+        center: [0.0, 0.0]
+        radius_m: 220.0
+        start_slot: 30
+        end_slot: 450
+        surge_factor: 3.0
+

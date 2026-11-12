@@ -32,7 +32,7 @@ from src.agent_factory import make_agent
 from src.metrics import MetricTracker
 
 
-def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
+def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu', scenario='SCENARIO_B_HOTSPOT'):
     """
     Run 100 evaluation episodes and calculate statistical mean +/- std and 95% CI
     for Trajectories, Energy Consumption, Task Latency, and Completion Ratio.
@@ -41,8 +41,10 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
     print("      100-EPISODE PAPER EVALUATION FRAMEWORK FOR MULTI-UAV MEC      ")
     print("=" * 75)
     print(f"  Configuration : {NUM_UAVS} UAVs, {NUM_USERS} IoT Devices, {NUM_CLUSTERS} Clusters")
-    print(f"  Clustering    : Pre-deployment Workload-Aware K-Means (lambda_w={LAMBDA_W})")
-    print(f"  Policy Model  : Action-Masked Gaussian MAPPO")
+    print(f"  Scenario      : {scenario}")
+    print(f"  Clustering    : Pre-deployment Geometric Spatial K-Means")
+    print(f"  Concurrency   : Transceiver Cap K_comm = {K_COMM_DEFAULT} per UAV")
+    print(f"  Policy Model  : Action-Masked 4-Head Factorized MAPPO")
     print(f"  Evaluation    : {num_episodes} Episodes x {max_steps_per_episode} Slots")
     print("=" * 75)
 
@@ -51,7 +53,7 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
     plots_dir = os.path.join(out_dir, "plots")
     os.makedirs(plots_dir, exist_ok=True)
 
-    env = MultiUAVMECEnv(num_users=NUM_USERS, num_uavs=NUM_UAVS, seed=42)
+    env = MultiUAVMECEnv(num_users=NUM_USERS, num_uavs=NUM_UAVS, scenario=scenario, seed=42)
 
     agent = make_agent(
         method="MAPPO",
@@ -64,9 +66,9 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
 
     # Auto-load trained model checkpoint if available
     ckpt_candidates = [
+        "results/new_experiment/checkpoints/seed_42/checkpoint_best.pt",
         "results/checkpoints/MAPPO_seed42/best_model.pt",
-        "results/checkpoints/DMJO/full/best_model.pt",
-        "results/checkpoints/MAPPO/full/best_model.pt",
+        "results/new_experiment/checkpoints/seed_42/checkpoint_final.pt",
         "results/checkpoints/best_model.pt",
         "results/checkpoints/final_model.pt"
     ]
@@ -131,10 +133,14 @@ def run_100_episodes(num_episodes=100, max_steps_per_episode=500, device='cpu'):
             step_comp = info.get('completed_tasks_step', info.get('completed_tasks', 0))
             step_exp = info.get('expired_tasks_step', info.get('deadline_violations', 0))
             ep_tasks_completed += step_comp
-            new_gen = sum(1 for d in env.devices if d.current_task is not None)
-            ep_tasks_generated += max(step_comp + step_exp, new_gen)
+            step_gen = info.get('generated_tasks_step', 0)
+            ep_tasks_generated += step_gen
 
             obs, state = next_obs, next_state
+
+        total_gen_recorded = sum(len(d.all_tasks) for d in env.devices)
+        if total_gen_recorded > 0:
+            ep_tasks_generated = total_gen_recorded
 
         avg_ep_latency = ep_latency_sum / max_steps_per_episode
         avg_ep_energy = ep_energy_sum / max_steps_per_episode

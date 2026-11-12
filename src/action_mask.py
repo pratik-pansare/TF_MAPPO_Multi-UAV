@@ -5,18 +5,22 @@ Paper Reference: Section III.F & Constraints (C1–C15)
 Target Journal: IEEE Internet of Things Journal
 
 Features:
-  1. Discrete Action Feasibility Masking M_m^clu(t) for Cluster Selection:
-       - tau_m(t)=0, phi_m(t)=0, or E_m < E_res -> cluster choices c in {1..C} masked, c=0 (idle) retained.
-       - Max service radius violation d_{m,c} > R_max -> cluster c masked.
-       - Idle fallback (c=0) is ALWAYS valid, ensuring valid probability normalization.
-  2. Deterministic Joint Cluster Conflict Resolution:
-       - Enforces cluster exclusivity: sum_m x_{m,c}(t) <= 1.
-       - If multiple UAVs select the same cluster, tie-break by spatial proximity and queue depth.
+  1. Discrete Action Feasibility Masking:
+     - a_m^clu in {0, 1, ..., C}: Macro spatial target for navigation.
+       Multiple UAVs may approach the same hotspot region when demand surges.
+       Choice 0 (idle) is always safe and valid.
+     - a_m^off: Masked candidate scheduling head respecting K_m^comm.
+       Only IoT devices physically within actual 3D coverage radius,
+       with rate R_im >= R_min and eligible UAV (e_m=1), can have active mask = 1.
+  2. Multi-Device Radio Concurrency & Exclusivity Shield:
+     - sum_i u_im(t) <= K_m^comm per UAV (Constraint C3a).
+     - sum_m u_im(t) <= 1 per IoT device (Constraint C3b).
+     - Deterministic tie-breaking by channel quality/rate.
   3. Continuous-Time Trajectory Collision Shield:
-       - Evaluates minimum separation across the continuous interval s in [0, 1]:
-           min_{s in [0, 1]} ||(q_m - q_n) + s*(d_m - d_n)|| >= d_safe
-       - Decelerates or halts hazardous movement proposals.
-  4. Boundary and Battery Reserve Projection.
+     - Continuous segment evaluation s in [0, 1]:
+       min_{s in [0, 1]} ||(q_m - q_n) + s*(d_m - d_n)|| >= d_safe
+     - Decelerates or halts hazardous movement proposals.
+  4. Physical Boundary & Battery Reserve Projections.
 """
 
 import numpy as np
@@ -27,40 +31,86 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from config import (
         MIN_BATTERY_RESERVE, MAX_SERVICE_RADIUS, SAFE_INTER_UAV_DISTANCE,
-        AREA_RADIUS, UAV_ALT_MIN, UAV_ALT_MAX
+        AREA_RADIUS, UAV_ALT_MIN, UAV_ALT_MAX, K_COMM_DEFAULT, MAX_CANDIDATE_POOL,
+        R_MIN_UPLINK
     )
 except ImportError:
     MIN_BATTERY_RESERVE = 50.0
-    MAX_SERVICE_RADIUS = 600.0
+    MAX_SERVICE_RADIUS = 250.0
     SAFE_INTER_UAV_DISTANCE = 10.0
     AREA_RADIUS = 500.0
     UAV_ALT_MIN = 50.0
     UAV_ALT_MAX = 150.0
+    K_COMM_DEFAULT = 3
+    MAX_CANDIDATE_POOL = 8
+    R_MIN_UPLINK = 1e5
 
 
 class ActionMaskGenerator:
     """
-    Generates discrete feasibility mask M_m(t) for cluster selection c_m in {0, 1, ..., C}.
-    Index 0: Idle / No service.
-    Index 1..C: Cluster 1 to C.
+    Generates state-dependent feasibility masks for:
+      1. Macro target cluster choice c_m in {0, 1, ..., C}.
+      2. Offload scheduling candidate selection over padded candidate list (size MAX_CANDIDATE_POOL).
     """
 
     def __init__(self, n_uavs, n_clusters=5, action_dim=5, min_battery_res=MIN_BATTERY_RESERVE,
-                 max_service_radius=MAX_SERVICE_RADIUS, **kwargs):
+                 max_service_radius=MAX_SERVICE_RADIUS, k_comm=K_COMM_DEFAULT,
+                 max_candidate_pool=MAX_CANDIDATE_POOL, **kwargs):
         self.n_uavs = n_uavs
         self.n_clusters = n_clusters
         self.action_dim = action_dim
         self.min_battery_res = min_battery_res
         self.max_service_radius = max_service_radius
+        self.k_comm = k_comm
+        self.max_candidate_pool = max_candidate_pool
+
+    def compute_cluster_mask(self, uav_positions, uav_batteries, cluster_centroids,
+                             eligibility_states, tau_states, phi_states):
+        """
+        Compute binary cluster target mask of shape (n_uavs, n_clusters + 1).
+        Index 0 is ALWAYS 1.0 (idle is always safe).
+        Multiple UAVs are allowed to approach the same hotspot if demand warrants it.
+        """
+        mask = np.ones((self.n_uavs, self.n_clusters + 1), dtype=np.float32)
+
+        for m in range(self.n_uavs):
+            # Ineligible UAV: unauthenticated, hardware fault, or low battery
+            if eligibility_states[m] == 0 or tau_states[m] == 0 or phi_states[m] == 0 or uav_batteries[m] <= self.min_battery_res:
+                mask[m, 1:] = 0.0
+                mask[m, 0] = 1.0
+                continue
+
+            # Ensure at least idle is valid
+            mask[m, 0] = 1.0
+
+        return mask
+
+    def compute_candidate_mask(self, candidate_counts):
+        """
+        Compute binary candidate mask of shape (n_uavs, max_candidate_pool).
+        mask[m, k] = 1.0 if candidate k is a real covered node, 0.0 if padded/empty.
+        """
+        mask = np.zeros((self.n_uavs, self.max_candidate_pool), dtype=np.float32)
+        for m in range(self.n_uavs):
+            c_count = min(int(candidate_counts[m]), self.max_candidate_pool)
+            if c_count > 0:
+                mask[m, :c_count] = 1.0
+        return mask
 
     def compute_action_mask(self, uav_positions, uav_batteries, uav_capacities=None,
-                            eligibility_states=None, tau_states=None, phi_states=None, cluster_centroids=None):
+                            eligibility_states=None, tau_states=None, phi_states=None,
+                            cluster_centroids=None, candidate_counts=None):
+        """
+        Backward-compatible unified action mask getter.
+        Returns cluster target mask of shape (n_uavs, n_clusters + 1).
+        """
         if eligibility_states is None:
             eligibility_states = np.ones(self.n_uavs, dtype=int)
         if tau_states is None:
             tau_states = np.ones(self.n_uavs, dtype=int)
         if phi_states is None:
             phi_states = np.ones(self.n_uavs, dtype=int)
+
         return self.compute_cluster_mask(
             uav_positions=uav_positions,
             uav_batteries=uav_batteries,
@@ -70,69 +120,52 @@ class ActionMaskGenerator:
             phi_states=phi_states
         )
 
-    def compute_cluster_mask(self, uav_positions, uav_batteries, cluster_centroids,
-                              eligibility_states, tau_states, phi_states):
-        """
-        Compute binary cluster mask of shape (n_uavs, n_clusters + 1).
-        Mask value 1.0 = Feasible choice, 0.0 = Infeasible choice.
-        Index 0 is ALWAYS 1.0 (idle is always safe and feasible).
-        """
-        mask = np.ones((self.n_uavs, self.n_clusters + 1), dtype=np.float32)
-
-        for m in range(self.n_uavs):
-            # Ineligible UAV: unauthenticated, hardware fault, or low battery
-            if eligibility_states[m] == 0 or tau_states[m] == 0 or phi_states[m] == 0 or uav_batteries[m] <= self.min_battery_res:
-                # Mask out all operational clusters 1..C
-                mask[m, 1:] = 0.0
-                mask[m, 0] = 1.0  # Idle is strictly feasible
-                continue
-
-            # Reachability check: distance to cluster centroid <= R_max
-            if cluster_centroids is not None and len(cluster_centroids) > 0:
-                uav_pos_2d = uav_positions[m][:2]
-                for c in range(min(self.n_clusters, len(cluster_centroids))):
-                    dist = np.linalg.norm(uav_pos_2d - cluster_centroids[c])
-                    if dist > self.max_service_radius:
-                        mask[m, c + 1] = 0.0
-
-            # Ensure at least idle is valid
-            mask[m, 0] = 1.0
-
-        return mask
-
 
 class JointSafetyShield:
     """
-    Deterministic Safety Shield enforcing:
-      1. Cluster exclusivity: sum_m x_{m,c}(t) <= 1
-      2. Continuous-time trajectory collision avoidance: min_{s in [0,1]} ||Delta p(s)|| >= d_safe
-      3. Physical workspace boundaries and battery depletion limits
+    Deterministic Safety & Concurrency Shield enforcing:
+      1. Single connection per device: sum_m u_{i,m}(t) <= 1
+      2. Per-UAV concurrency cap: sum_i u_{i,m}(t) <= K_m^comm
+      3. Continuous-time trajectory collision avoidance: min_{s in [0,1]} ||Delta p(s)|| >= d_safe
+      4. Physical workspace boundaries and battery depletion limits
     """
 
     def __init__(self, n_uavs, safe_dist=SAFE_INTER_UAV_DISTANCE,
-                 area_radius=AREA_RADIUS, alt_min=UAV_ALT_MIN, alt_max=UAV_ALT_MAX):
+                 area_radius=AREA_RADIUS, alt_min=UAV_ALT_MIN, alt_max=UAV_ALT_MAX,
+                 k_comm=K_COMM_DEFAULT):
         self.n_uavs = n_uavs
         self.safe_dist = safe_dist
         self.area_radius = area_radius
         self.alt_min = alt_min
         self.alt_max = alt_max
+        self.k_comm = k_comm
         self.total_shield_interventions = 0
-        self.cluster_conflicts_resolved = 0
+        self.link_conflicts_resolved = 0
 
-    def resolve_cluster_conflicts(self, proposed_clusters, uav_positions, cluster_centroids, eligibility):
+    def resolve_cluster_conflicts(self, proposed_clusters, uav_positions=None, cluster_centroids=None, eligibility=None, strict_exclusivity=True):
         """
-        Enforce cluster exclusivity (sum_m x_{m,c} <= 1) deterministically.
-        If multiple UAVs choose cluster c (c >= 1), closest UAV wins; others redirected or idle.
+        Enforce cluster target exclusivity deterministically when strict_exclusivity=True,
+        or allow multi-UAV regional concentration when strict_exclusivity=False.
         """
+        if eligibility is None:
+            eligibility = np.ones(self.n_uavs, dtype=int)
+
         executed_clusters = np.zeros(self.n_uavs, dtype=int)
-        claimed_clusters = set()
 
-        # Sort UAVs by eligibility and proximity
-        # Priority: eligible first, then closer to proposed cluster centroid
+        if not strict_exclusivity:
+            for m in range(self.n_uavs):
+                if eligibility[m] == 1:
+                    executed_clusters[m] = int(proposed_clusters[m])
+                else:
+                    executed_clusters[m] = 0
+            return executed_clusters
+
+        # Strict cluster exclusivity (sum_m x_{m,c} <= 1)
+        claimed_clusters = set()
         scores = []
         for m in range(self.n_uavs):
-            c = proposed_clusters[m]
-            if c == 0 or eligibility[m] == 0 or cluster_centroids is None or c - 1 >= len(cluster_centroids):
+            c = int(proposed_clusters[m])
+            if c == 0 or eligibility[m] == 0 or cluster_centroids is None or c - 1 >= len(cluster_centroids) or uav_positions is None:
                 dist = 1e9
             else:
                 dist = np.linalg.norm(uav_positions[m][:2] - cluster_centroids[c - 1])
@@ -147,15 +180,13 @@ class JointSafetyShield:
                 executed_clusters[m] = c
                 claimed_clusters.add(c)
             else:
-                # Conflict! Another UAV claimed cluster c
-                self.cluster_conflicts_resolved += 1
-                # Find nearest unclaimed cluster, else fallback to idle 0
+                self.link_conflicts_resolved += 1
                 best_alt = 0
                 best_alt_dist = 1e9
                 if cluster_centroids is not None:
                     for alt_c in range(1, len(cluster_centroids) + 1):
                         if alt_c not in claimed_clusters:
-                            alt_dist = np.linalg.norm(uav_positions[m][:2] - cluster_centroids[alt_c - 1])
+                            alt_dist = np.linalg.norm(uav_positions[m][:2] - cluster_centroids[alt_c - 1]) if uav_positions is not None else 0.0
                             if alt_dist < best_alt_dist:
                                 best_alt_dist = alt_dist
                                 best_alt = alt_c
@@ -163,9 +194,42 @@ class JointSafetyShield:
                     executed_clusters[m] = best_alt
                     claimed_clusters.add(best_alt)
                 else:
-                    executed_clusters[m] = 0  # Idle fallback
+                    executed_clusters[m] = 0
 
         return executed_clusters
+
+    def resolve_link_conflicts(self, proposed_links_by_uav, candidate_rates_by_uav, k_comm=None):
+        """
+        Enforces:
+          1. sum_i u_im(t) <= K_m^comm
+          2. sum_m u_im(t) <= 1
+        proposed_links_by_uav: dict {m: [list of device_ids proposed]}
+        candidate_rates_by_uav: dict {m: {device_id: rate}}
+        Returns: scheduled_links {m: [list of device_ids]}
+        """
+        cap = k_comm if k_comm is not None else self.k_comm
+        scheduled = {m: [] for m in range(self.n_uavs)}
+        claimed_devices = set()
+
+        # Collect all link proposals as (rate, m, dev_id) tuples sorted descending by rate
+        all_proposals = []
+        for m in range(self.n_uavs):
+            for dev_id in proposed_links_by_uav.get(m, []):
+                rate = candidate_rates_by_uav.get(m, {}).get(dev_id, 0.0)
+                all_proposals.append((rate, m, dev_id))
+
+        all_proposals.sort(key=lambda item: item[0], reverse=True)
+
+        for rate, m, dev_id in all_proposals:
+            if len(scheduled[m]) >= cap:
+                continue
+            if dev_id in claimed_devices:
+                self.link_conflicts_resolved += 1
+                continue
+            scheduled[m].append(dev_id)
+            claimed_devices.add(dev_id)
+
+        return scheduled
 
     def check_continuous_separation(self, p1, p2, d1, d2):
         """
@@ -178,7 +242,6 @@ class JointSafetyShield:
 
         dv_sq = np.sum(dv ** 2)
         if dv_sq < 1e-9:
-            # Parallel trajectories or both hovering
             return float(np.linalg.norm(dp)), 0.0
 
         s_star = -np.dot(dp, dv) / dv_sq
@@ -203,10 +266,8 @@ class JointSafetyShield:
                 )
 
                 if d_min < self.safe_dist:
-                    # Imminent trajectory collision!
                     intervened = True
                     self.total_shield_interventions += 1
-                    # Safety intervention: Halt or scale down displacements
                     scale = max(0.0, (d_min / max(self.safe_dist, 1.0)) - 0.1)
                     safe_disp[m] *= scale
                     safe_disp[n] *= scale
