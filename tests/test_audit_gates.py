@@ -268,10 +268,14 @@ class TestAuditGates(unittest.TestCase):
         centroids = np.array([[0, 0], [200, 200]])
         eligibility = np.array([1, 1, 1])
 
-        executed = shield.resolve_cluster_conflicts(proposed, pos, centroids, eligibility)
-        # Each cluster c in {1, 2} can be claimed by AT MOST one UAV
-        counts = [np.sum(executed == c) for c in [1, 2]]
-        self.assertTrue(all(cnt <= 1 for cnt in counts))
+        # Strict exclusivity mode
+        executed_strict = shield.resolve_cluster_conflicts(proposed, pos, centroids, eligibility, strict_exclusivity=True)
+        counts_strict = [np.sum(executed_strict == c) for c in [1, 2]]
+        self.assertTrue(all(cnt <= 1 for cnt in counts_strict))
+
+        # Default multi-UAV shared targeting mode
+        executed_shared = shield.resolve_cluster_conflicts(proposed, pos, centroids, eligibility, strict_exclusivity=False)
+        self.assertEqual(int(np.sum(executed_shared == 1)), 2)
 
     # -------------------------------------------------------------
     # Gate 11: PPO Log Probabilities Finite Under Action Mask

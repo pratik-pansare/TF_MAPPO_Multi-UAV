@@ -37,7 +37,7 @@ This repository implements the authoritative research framework incorporating th
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Static Ground IoT Devices (N = 100)                   │
+│                       Static Ground IoT Devices (N = 80)                    │
 │   Fixed coordinates p_i · Causal Event Generation · Multi-Slot Payload Bits │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │ Uplink Channel: 3D Distance, Elevation Angle,
@@ -53,7 +53,7 @@ This repository implements the authoritative research framework incorporating th
                                        │ Feasible Action Masks & Filtered Observations
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Multi-UAV MEC Fleet (M = 5 Aerial Servers)               │
+│                    Multi-UAV MEC Fleet (M = 4 Aerial Servers)               │
 │  ┌───────────────────────┐  ┌─────────────────────────────────────────────┐ │
 │  │ Trust & Fault Manager │  │ Hybrid Factorized Action-Masked MAPPO       │ │
 │  │ - Certificate: τ_m(t) │  │   1. a_m^clu : Spatial Cluster Waypoint Head│ │

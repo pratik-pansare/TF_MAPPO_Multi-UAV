@@ -22,8 +22,9 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
 from config import *
-from src.task import StaticIoTDevice, TaskStatus, EnvironmentStateManager
+from src.task import StaticIoTDevice, TaskStatus, EnvironmentStateManager, TaskLedger
 from src.clustering import SpatialClusterManager, BSCommissioningManager, IoTDeviceRegistrationReport
 from src.channel import ChannelModel
 from src.computation import ComputationManager
@@ -84,7 +85,14 @@ class MultiUAVMECEnv:
         self.current_slot = 0
         self.global_time = 0.0
 
+        # Physical Mobility & Causal Engine Parameters
+        self.v_cr = getattr(config, 'UAV_CRUISE_SPEED', 15.0)
+        self.beta_guidance = getattr(config, 'GUIDANCE_COEF', 0.35)
+        self.t_miss = getattr(config, 'T_MISS_PENALTY', 2.0)
+        self.exogenous_trace = None
+
         # Domain Managers
+        self.task_ledger = TaskLedger()
         self.commissioning_mgr = BSCommissioningManager()
         self.channel_model = ChannelModel()
         self.trust_manager = TrustManager(n_uavs=num_uavs, cert_duration=CERTIFICATE_DURATION)
@@ -116,7 +124,7 @@ class MultiUAVMECEnv:
             angle = self.rng.uniform(0.0, 2.0 * np.pi)
             r = self.rng.uniform(10.0, self.area_radius)
             pos = [r * np.cos(angle), r * np.sin(angle), 0.0]
-            dev = StaticIoTDevice(device_id=i, position=pos)
+            dev = StaticIoTDevice(device_id=i, position=pos, ledger=self.task_ledger)
             self.devices.append(dev)
 
             # Pre-deployment BS Registration (identity + location only)
@@ -138,21 +146,32 @@ class MultiUAVMECEnv:
         self.last_reward_components = {}
         self.last_scheduled_links = {m: [] for m in range(num_uavs)}
 
-    def reset(self, seed=None):
-        """Reset environment to initial state."""
+    def reset(self, seed=None, trace=None):
+        """Reset environment to initial state with clean task ledger and optional exogenous trace."""
         if seed is not None:
             self.rng = np.random.RandomState(seed)
         self.current_slot = 0
         self.global_time = 0.0
+        if trace is not None:
+            self.exogenous_trace = trace
 
+        self.task_ledger = TaskLedger()
         self.trust_manager.reset()
         self.fault_manager.reset(seed=seed)
         self.computation_manager.reset()
         self.env_state_mgr = EnvironmentStateManager(scenario_name=self.scenario_name, seed=seed or 42)
 
         for dev in self.devices:
+            dev.ledger = self.task_ledger
             dev.reset()
-            dev.generate_task(slot=0, rng=self.rng, env_manager=self.env_state_mgr, current_time=0.0)
+
+        if self.exogenous_trace is not None:
+            for exo in self.exogenous_trace:
+                if int(exo.generation_time / SLOT_DURATION) == 0:
+                    self.devices[exo.device_id].ingest_task(exo, current_time=0.0)
+        else:
+            for dev in self.devices:
+                dev.generate_task(slot=0, rng=self.rng, env_manager=self.env_state_mgr, current_time=0.0)
 
         # Pre-deployment Spatial Clustering
         uav_altitudes = [u.altitude for u in self.uavs]
@@ -168,6 +187,7 @@ class MultiUAVMECEnv:
         """
         Evaluates physical coverage I_{m,cov}(t) for all UAVs based on 3D distance,
         minimum rate threshold R_min, and UAV service eligibility e_m(t) = 1.
+        Never offers tasks already QUEUED, IN_SERVICE, or bound to another UAV.
         Stores up to max_candidate_pool candidates per UAV.
         """
         eligibility = self.fault_manager.eligibility
@@ -179,7 +199,18 @@ class MultiUAVMECEnv:
 
             candidates = []
             for dev in self.devices:
-                if dev.current_task is None or dev.current_task.is_finished:
+                task = dev.current_task
+                if task is None or task.is_finished:
+                    continue
+
+                # Invariant: Do not offer tasks already queued or in service
+                if task.status in [TaskStatus.QUEUED, TaskStatus.IN_SERVICE, TaskStatus.UPLOADED]:
+                    continue
+
+                # Invariant: Immutable upload binding
+                if task.status == TaskStatus.PAUSED_UPLOADING and task.serving_uav_id != m:
+                    continue
+                if task.serving_uav_id != -1 and task.serving_uav_id != m:
                     continue
 
                 d_3d = self.channel_model.compute_distance_3d(dev.position, uav.position)
@@ -189,7 +220,7 @@ class MultiUAVMECEnv:
                         dev.position, uav.position, dev.tx_power, uav.bandwidth / max(1, self.k_comm)
                     )
                     if rate >= R_MIN_UPLINK:
-                        candidates.append((dev, rate, d_3d, dev.current_task.deadline))
+                        candidates.append((dev, rate, d_3d, task.deadline))
 
             # Prioritize earliest deadline tasks (EDF order), then higher rate
             candidates.sort(key=lambda item: (item[3], -item[1]))
@@ -290,19 +321,33 @@ class MultiUAVMECEnv:
     def step(self, actions):
         """
         Execute joint environment transition for interval [t*Delta_t, (t+1)*Delta_t].
+        Two-stage decision structure:
+          Stage 1 (Preflight):
+            - Macro cluster target c_m
+            - Target-conditioned continuous 3D flight displacement Delta q_m
+            - Per-resident-job CPU frequency allocation for already queued work
+            - Propulsion energy during flight (t_fly) and hover (t_hover = Delta_t - t_fly)
+          Stage 2 (Hover-position request discovery & link scheduling):
+            - At hovering position (t_slot_start + t_fly), discover reachable tasks
+            - Select admissions and active links under K_m^comm and exclusivity sum_m u_im <= 1
+            - Transfer bits during t_hover; finished uploads staged for slot t+1
+          Boundary:
+            - At slot end ((t+1)*Delta_t), staged tasks promoted to resident queues
+            - Sweeping deadline expiration
+            - Exact Problem P1 reward logging
         """
-        self.current_slot += 1
-        self.global_time += SLOT_DURATION
+        t = self.current_slot
+        t_slot_start = t * SLOT_DURATION
+        t_slot_end = (t + 1) * SLOT_DURATION
         actions = np.array(actions, dtype=float)
 
+        # Parse actions
         if actions.shape[1] == 5:
-            # Backward-compatible 5-dim action format [cluster, dx, dy, dz, cpu]
             proposed_clusters = np.round(actions[:, 0]).astype(int)
             proposed_offload_scores = np.ones((self.num_uavs, self.max_candidate_pool), dtype=float)
             proposed_mov = actions[:, 1:4]
             proposed_cpu_frac = np.clip(actions[:, 4], 0.0, 1.0)
         else:
-            # Full 4-head factorized action format [cluster, offload_scores (K_pool), dx, dy, dz, cpu]
             proposed_clusters = np.round(actions[:, 0]).astype(int)
             idx_off_end = 1 + self.max_candidate_pool
             proposed_offload_scores = actions[:, 1:idx_off_end]
@@ -312,7 +357,7 @@ class MultiUAVMECEnv:
         proposed_clusters = np.clip(proposed_clusters, 0, self.num_clusters)
 
         # -------------------------------------------------------------
-        # 1. Macro Cluster Target Assignment
+        # 1. Macro Cluster Target Assignment (multi-UAV choices permitted)
         # -------------------------------------------------------------
         uav_positions = np.array([u.position for u in self.uavs])
         eligibility = self.fault_manager.eligibility
@@ -321,7 +366,8 @@ class MultiUAVMECEnv:
             proposed_clusters=proposed_clusters,
             uav_positions=uav_positions,
             cluster_centroids=self.cluster_manager.centroids,
-            eligibility=eligibility
+            eligibility=eligibility,
+            strict_exclusivity=False
         )
         cluster_intervened = bool(np.any(executed_clusters != proposed_clusters))
 
@@ -329,31 +375,71 @@ class MultiUAVMECEnv:
             uav.assigned_cluster = executed_clusters[m]
 
         # -------------------------------------------------------------
-        # 2. Continuous-Time Trajectory Safety Shielding
+        # 2. Target-Conditioned Movement & Piecewise Trajectory Safety Shield
         # -------------------------------------------------------------
+        cluster_centroids = self.cluster_manager.centroids
+        guided_mov = np.copy(proposed_mov)
+        beta_guidance = getattr(self, 'beta_guidance', 0.35)
+
+        for m in range(self.num_uavs):
+            c_idx = executed_clusters[m]
+            if c_idx > 0 and cluster_centroids is not None and (c_idx - 1) < len(cluster_centroids):
+                c_pos = cluster_centroids[c_idx - 1]
+                diff = c_pos - uav_positions[m][:2]
+                norm_diff = np.linalg.norm(diff)
+                if norm_diff > 1e-3:
+                    u_target = np.array([diff[0] / norm_diff, diff[1] / norm_diff, 0.0])
+                    guided_mov[m] = (1.0 - beta_guidance) * proposed_mov[m] + beta_guidance * u_target
+
         proposed_displacements = np.zeros((self.num_uavs, 3), dtype=float)
         for m, uav in enumerate(self.uavs):
             if eligibility[m] == 1:
-                norm_u = np.linalg.norm(proposed_mov[m])
+                norm_u = np.linalg.norm(guided_mov[m])
                 scale = 1.0 / max(1.0, norm_u)
-                disp = proposed_mov[m] * scale * uav.max_displacement
+                disp = guided_mov[m] * scale * min(uav.max_displacement, self.v_cr * SLOT_DURATION)
                 proposed_displacements[m] = disp
 
         safe_displacements, traj_intervened = self.safety_shield.shield_trajectories(
             uav_positions=uav_positions,
-            proposed_displacements=proposed_displacements
+            proposed_displacements=proposed_displacements,
+            v_cr=self.v_cr,
+            delta_t=SLOT_DURATION
         )
         shield_intervened = bool(traj_intervened or cluster_intervened)
+
+        # Apply flight movement & compute flight/hover duration per UAV
+        t_fly = np.zeros(self.num_uavs, dtype=float)
+        t_hover = np.zeros(self.num_uavs, dtype=float)
 
         for m, uav in enumerate(self.uavs):
             if eligibility[m] == 1:
                 uav.position += safe_displacements[m]
-                uav.velocity = safe_displacements[m] / SLOT_DURATION
+                disp_norm = float(np.linalg.norm(safe_displacements[m]))
+                t_fly[m] = min(SLOT_DURATION, disp_norm / self.v_cr)
+                t_hover[m] = max(0.0, SLOT_DURATION - t_fly[m])
+                uav.velocity = safe_displacements[m] / max(t_fly[m], 1e-3) if t_fly[m] > 1e-3 else np.zeros(3)
             else:
                 uav.velocity = np.zeros(3)
+                t_fly[m] = 0.0
+                t_hover[m] = 0.0
 
         # -------------------------------------------------------------
-        # 3. Dynamic Coverage-Driven Link Scheduling under Concurrency Cap
+        # 3. CPU Computation on Resident Jobs throughout slot [t_slot_start, t_slot_end]
+        # -------------------------------------------------------------
+        allocated_cpus = [
+            self.uavs[m].cpu_freq * float(np.clip(proposed_cpu_frac[m], 0.2, 1.0))
+            if eligibility[m] == 1 else 0.0
+            for m in range(self.num_uavs)
+        ]
+
+        slot_completed, slot_expired = self.computation_manager.process_slot(
+            uav_cpu_frequencies=allocated_cpus,
+            current_time_s=t_slot_start,
+            delta_t=SLOT_DURATION
+        )
+
+        # -------------------------------------------------------------
+        # 4. Request Discovery at Hover Position and Link Scheduling
         # -------------------------------------------------------------
         self._update_candidate_cache()
 
@@ -364,19 +450,15 @@ class MultiUAVMECEnv:
             cands = self.cached_candidates[m]
             candidate_rates_by_uav[m] = {cand[0].id: cand[1] for cand in cands}
 
-            if len(cands) == 0:
+            if len(cands) == 0 or t_hover[m] <= 1e-4:
                 proposed_links_by_uav[m] = []
                 continue
 
-            # Rank candidates by policy priority score across all max_candidate_pool slots
             scores = proposed_offload_scores[m]
-            ranked_indices = np.argsort(-scores)  # Highest score first
-
-            # Select up to k_comm candidates corresponding to valid candidate indices
+            ranked_indices = np.argsort(-scores)
             selected_dev_ids = [cands[idx][0].id for idx in ranked_indices[:self.k_comm] if idx < len(cands)]
             proposed_links_by_uav[m] = selected_dev_ids
 
-        # Enforce link exclusivity (sum_m u_im <= 1) and per-UAV concurrency (sum_i u_im <= K_m^comm)
         scheduled_links = self.safety_shield.resolve_link_conflicts(
             proposed_links_by_uav=proposed_links_by_uav,
             candidate_rates_by_uav=candidate_rates_by_uav,
@@ -385,19 +467,21 @@ class MultiUAVMECEnv:
         self.last_scheduled_links = scheduled_links
 
         # -------------------------------------------------------------
-        # 4. Multi-Slot Uplink Transmission & Queue Execution
+        # 5. Uplink Data Transmission during Hovering Time t_hover[m]
         # -------------------------------------------------------------
         active_uplink_pairs = []
         active_rates = {}
 
         for m in range(self.num_uavs):
+            if t_hover[m] <= 1e-4:
+                continue
             uav = self.uavs[m]
             link_dev_ids = scheduled_links.get(m, [])
-            n_active_links = len(link_dev_ids)
-            if n_active_links == 0:
+            n_active = len(link_dev_ids)
+            if n_active == 0:
                 continue
 
-            ortho_bw = uav.bandwidth / n_active_links
+            ortho_bw = uav.bandwidth / n_active
             for dev_id in link_dev_ids:
                 dev = self.devices[dev_id]
                 task = dev.current_task
@@ -409,31 +493,43 @@ class MultiUAVMECEnv:
                     active_rates[task.task_id] = rate
                     dev.served_this_slot = True
 
-        # Process multi-slot upload progress
-        newly_queued, upload_expired = self.computation_manager.process_uplinks(
-            active_links=active_uplink_pairs,
-            rates=active_rates,
-            current_time_s=self.global_time,
-            delta_t=SLOT_DURATION
-        )
+        # Process uplinks during hover duration
+        # (Completed uploads placed in staging queues for next slot)
+        newly_queued = []
+        upload_expired = []
+        for uav_id, task in active_uplink_pairs:
+            rate = max(active_rates.get(task.task_id, 1e5), 1e3)
+            h_time = t_hover[uav_id]
+            t_tx_start = t_slot_start + t_fly[uav_id]
 
-        # Onboard CPU computation
-        allocated_cpus = [
-            self.uavs[m].cpu_freq * float(np.clip(proposed_cpu_frac[m], 0.2, 1.0))
-            if eligibility[m] == 1 else 0.0
-            for m in range(self.num_uavs)
-        ]
+            if task.t_upload_start is None:
+                task.assign_to_uav(uav_id, t_tx_start)
+                task.start_upload(t_tx_start)
 
-        slot_completed, slot_expired = self.computation_manager.process_slot(
-            uav_cpu_frequencies=allocated_cpus,
-            current_time_s=self.global_time,
-            delta_t=SLOT_DURATION
-        )
+            bits_can_transfer = rate * h_time
+            if task.remaining_bits <= bits_can_transfer:
+                t_tx = task.remaining_bits / rate
+                t_tx_end = t_tx_start + t_tx
+                task.transfer_bits(task.remaining_bits)
+
+                if t_tx_end <= task.t_absolute_deadline:
+                    self.computation_manager.record_upload_completed(uav_id, task, t_tx_end)
+                    newly_queued.append(task)
+                else:
+                    task.mark_expired(t_tx_end, TaskStatus.EXPIRED_IN_UPLOADING)
+                    self.computation_manager.expired_tasks.append(task)
+                    upload_expired.append(task)
+            else:
+                task.transfer_bits(bits_can_transfer)
+                if t_slot_end > task.t_absolute_deadline:
+                    task.mark_expired(t_slot_end, TaskStatus.EXPIRED_IN_UPLOADING)
+                    self.computation_manager.expired_tasks.append(task)
+                    upload_expired.append(task)
 
         total_slot_expired = slot_expired + upload_expired
 
         # -------------------------------------------------------------
-        # 5. UAV Energy Expenditure (Propulsion + CPU + U2U)
+        # 6. UAV Energy Expenditure (Piecewise Propulsion + CPU + U2U)
         # -------------------------------------------------------------
         total_fleet_energy = 0.0
         propulsion_energy = 0.0
@@ -441,8 +537,9 @@ class MultiUAVMECEnv:
         u2u_energy = 0.0
 
         for m, uav in enumerate(self.uavs):
-            speed = float(np.linalg.norm(uav.velocity))
-            e_fly = self.energy_manager.compute_propulsion_power(speed) * SLOT_DURATION
+            e_fly = self.energy_manager.compute_piecewise_propulsion_energy(
+                t_fly=t_fly[m], t_hover=t_hover[m], v_cr=self.v_cr
+            )
             exec_time = min(SLOT_DURATION, 1.0)
             e_comp = self.energy_manager.compute_computation_energy(allocated_cpus[m], exec_time)
             e_u2u = self.energy_manager.compute_u2u_energy(0.01)
@@ -456,21 +553,35 @@ class MultiUAVMECEnv:
             u2u_energy += e_u2u
 
         # -------------------------------------------------------------
-        # 6. Generate Stochastic Tasks for Next Slot via Environment State
+        # 7. Slot Boundary Advance: Staged tasks enter resident queues for slot t+1
         # -------------------------------------------------------------
-        new_tasks_generated = 0
+        self.computation_manager.advance_slot_boundary(new_slot_start_time=t_slot_end)
+
+        # Expire device buffer tasks that timed out
         for dev in self.devices:
-            new_task = dev.generate_task(
-                slot=self.current_slot,
-                rng=self.rng,
-                env_manager=self.env_state_mgr,
-                current_time=self.global_time
-            )
-            if new_task is not None and getattr(new_task, 'slot_generated', None) == self.current_slot:
-                new_tasks_generated += 1
+            dev.expire_tasks_in_buffer(t_slot_end)
 
         # -------------------------------------------------------------
-        # 7. Multi-Objective Reward Calculation (Problem P1)
+        # 8. Ingest Exogenous Tasks for Next Slot
+        # -------------------------------------------------------------
+        new_tasks_generated = 0
+        if getattr(self, 'exogenous_trace', None) is not None:
+            next_slot = t + 1
+            for exo in self.exogenous_trace:
+                if int(exo.generation_time / SLOT_DURATION) == next_slot:
+                    dev = self.devices[exo.device_id]
+                    dev.ingest_task(exo, current_time=t_slot_end)
+                    new_tasks_generated += 1
+        else:
+            for dev in self.devices:
+                new_task = dev.generate_task(
+                    slot=t + 1, rng=self.rng, env_manager=self.env_state_mgr, current_time=t_slot_end
+                )
+                if new_task is not None and getattr(new_task, 'slot_generated', None) == t + 1:
+                    new_tasks_generated += 1
+
+        # -------------------------------------------------------------
+        # 9. Problem P1 Multi-Objective Reward Calculation
         # -------------------------------------------------------------
         E_ref = max(self.num_uavs * 200.0, 1.0)
         T_ref = 2.0
@@ -494,6 +605,10 @@ class MultiUAVMECEnv:
         step_reward = r_energy + r_latency + r_completion + r_shield_pen
         rewards = np.full(self.n_agents, step_reward, dtype=np.float32)
 
+        # Advance slot counters
+        self.current_slot += 1
+        self.global_time = t_slot_end
+
         self.last_reward_components = {
             'step': self.current_slot,
             'r_energy': float(r_energy),
@@ -505,8 +620,6 @@ class MultiUAVMECEnv:
 
         done = (self.current_slot >= NUM_TIME_SLOTS)
         next_obs, next_state = self._get_obs_and_state()
-
-        # Count active communication links across the fleet
         active_links_count = sum(len(links) for links in scheduled_links.values())
 
         info = {
@@ -523,6 +636,8 @@ class MultiUAVMECEnv:
             'slot_completed_tasks': slot_completed,
             'reward_components': self.last_reward_components,
             'scheduled_links': scheduled_links,
+            't_fly': t_fly,
+            't_hover': t_hover,
         }
 
         return next_obs, next_state, rewards, done, info

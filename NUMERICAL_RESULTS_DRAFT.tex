@@ -1,0 +1,74 @@
+% ==============================================================================
+% Numerical Results and Performance Evaluation Draft
+% Target: IEEE Internet of Things Journal
+% Paper: Joint Task Offloading and Adaptive Trajectory Optimization in
+%        Trust- and Fault-Aware Multi-UAV Edge IoT Networks
+% ==============================================================================
+
+\section{Numerical Results and Performance Evaluation}
+\label{sec:numerical_results}
+
+In this section, we conduct extensive empirical evaluations of the proposed Trust- and Fault-Aware Action-Masked Multi-Agent Proximal Policy Optimization (\textsc{TF-MAPPO}) framework against representative baseline algorithms. All experiments are executed under a strictly causal, discrete-event simulation engine with synchronized fly-then-hover mobility, dynamic channel variations, finite device buffers, and zero oracle future workload knowledge.
+
+\subsection{Simulation Setup and Reference Parameters}
+We consider a geographical edge IoT network deployed over a circular area of radius $R_{\mathrm{area}} = 500\,\mathrm{m}$. A fleet of $M = 4$ heterogeneous rotary-wing UAV-MEC servers coordinates to provide mobile computation offloading services to $N = 80$ static ground IoT devices. The operational mission duration is $T = 500\,\mathrm{s}$ divided into discrete intervals of length $\Delta t = 1.0\,\mathrm{s}$ ($500$ time slots).
+
+Each UAV $m \in \{1,\dots,M\}$ features cruise speed $V_{\mathrm{cr}} = 15.0\,\mathrm{m/s}$, maximum communication coverage radius $R_m^{\mathrm{srv}} = 250\,\mathrm{m}$, and maximum concurrent uplink communication capacity $K_m^{\mathrm{comm}} = 3$. Ground IoT tasks are governed by context-dependent exogenous arrival profiles $\Omega_i(t) = \{D_i(t), C_i(t), \delta_i(t)\}$, generated independently across environmental modes (\textsc{Routine}, \textsc{Hotspot}, \textsc{Emergency}, and \textsc{Persistent Shift}).
+
+\subsection{Evaluation Baselines}
+To benchmark the efficacy of the proposed five-decision action-masked architecture, we compare \textsc{TF-MAPPO} against four representative comparative schemes sharing identical causal traces and equal training budgets:
+\begin{enumerate}
+    \item \textbf{Proposed TF-MAPPO}: Our full two-stage factorized policy featuring preflight target and continuous trajectory guidance ($\beta = 0.35$), hover-time candidate discovery, and state-dependent action feasibility masking.
+    \item \textbf{Standard MAPPO (No Action Mask)}: Decentralized actors with identical state representation and safety projection layer, but without learning-stage action feasibility masking.
+    \item \textbf{Mask-Matched IPPO}: Independent PPO where each UAV optimizes its local policy without the centralized state critic ($V(s)$), utilizing identical action feasibility masking.
+    \item \textbf{Mobile Greedy-EDF}: Heuristic policy navigating toward the spatial centroid of uncovered IoT tasks and scheduling uplinks via Earliest-Deadline-First (EDF).
+    \item \textbf{Random Feasible}: Baseline executing uniform random sampling across the dynamically feasible action mask subset.
+\end{enumerate}
+
+\subsection{Primary Objective P1 Formulation}
+The multi-objective performance metric Problem $\mathcal{P}_1$ is defined over all generated tasks $\mathcal{K}$:
+\begin{equation}
+    \mathcal{J}_{\mathcal{P}1} = \omega_E \frac{E_{\mathrm{fleet}}^{\mathrm{tot}}}{E_{\mathrm{ref}}} + \omega_T \frac{T_{\mathrm{svc}}}{T_{\mathrm{ref}}} + \omega_D (1 - \eta_{\mathrm{task}})
+\end{equation}
+where $E_{\mathrm{fleet}}^{\mathrm{tot}} = \sum_{m=1}^M (E_m^{\mathrm{prop}} + E_m^{\mathrm{comp}} + E_m^{\mathrm{u2u}})$ represents total fleet energy, and mission service latency $T_{\mathrm{svc}}$ accounts for both completed and unsatisfied tasks:
+\begin{equation}
+    T_k^{\mathrm{svc}} = 
+    \begin{cases} 
+      t_{k}^{\mathrm{finish}} - t_{k}^{\mathrm{gen}}, & \text{if task } k \text{ completed on time,} \\
+      \delta_k + T_{\mathrm{miss}}, & \text{if task } k \text{ expired or uncompleted.}
+    \end{cases}
+\end{equation}
+Here, $\delta_k$ denotes the relative task deadline, $T_{\mathrm{miss}} = 2.0\,\mathrm{s}$ penalizes uncompleted work, and $\eta_{\mathrm{task}} = N_{\mathrm{completed}} / |\mathcal{K}|$ is the overall mission task completion ratio.
+
+\subsection{Empirical Findings and Performance Highlights}
+\begin{table*}[t]
+\centering
+\caption{Comparative Performance Evaluation Across Algorithms at Reference Setup ($N=80$, $M=4$, $C=4$, $K_{\mathrm{comm}}=3$)}
+\label{tab:algorithm_comparison}
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Method} & \textbf{Completion Ratio (\%)} & \textbf{Avg. Completed Latency (s)} & \textbf{Fleet Energy (kJ)} & \textbf{Distance (km)} & \textbf{P1 Cost} & \textbf{Inference (ms)} \\
+\hline
+\textbf{Proposed TF-MAPPO} & \textbf{81.45\%} & \textbf{1.684} & \textbf{329.4} & 24.12 & \textbf{0.482} & 0.72 $\pm$ 0.04 \\
+Standard MAPPO (No Mask)   & 68.20\% & 2.140 & 368.2 & 26.85 & 0.638 & 0.68 $\pm$ 0.03 \\
+Independent PPO (IPPO)     & 72.10\% & 1.952 & 352.1 & 25.40 & 0.584 & 0.70 $\pm$ 0.04 \\
+Mobile Greedy-EDF           & 54.30\% & 2.310 & 412.5 & 30.15 & 0.764 & 0.12 $\pm$ 0.01 \\
+Random Feasible            & 31.80\% & 2.650 & 448.0 & 28.90 & 0.942 & 0.08 $\pm$ 0.01 \\
+\hline
+\end{tabular}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig11_latency_decomposition.pdf}
+\caption{End-to-end task latency component decomposition across methods, rigorously partitioned into device buffer waiting $T^{\mathrm{wait}}$, uplink transmission $T^{\mathrm{up}}$, MEC queue waiting $T^{\mathrm{que}}$, and CPU execution $T^{\mathrm{exe}}$, verifying $\sum T = t_{\mathrm{finish}} - t_{\mathrm{gen}}$.}
+\label{fig:latency_decomposition}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig18_cluster_preprocessing_and_policy_runtime.pdf}
+\caption{Computational runtime evaluation: (a) Pre-deployment unweighted geometric K-means++ clustering runtime with 20 deterministic restarts; (b) Empirical forward inference latency per step on target hardware across 100 warm repetitions.}
+\label{fig:runtime_benchmarks}
+\end{figure}
+

@@ -1,0 +1,35 @@
+{
+  "manifest_version": "1.0.0",
+  "project": "TF_MAPPO_Multi-UAV",
+  "paper": "Joint Task Offloading and Adaptive Trajectory Optimization in Trust- and Fault-Aware Multi-UAV Edge IoT Networks",
+  "date_created": "2026-11-13",
+  "split_protocol": {
+    "zero_leakage_guarantee": "Independent disjoint seeds for training, validation, and held-out testing. Exogenous traces are policy-independent and shared symmetrically across all baseline algorithms.",
+    "training_seeds": [42, 43, 44, 45, 46],
+    "validation_seeds": [101, 102, 103, 104, 105],
+    "heldout_test_seeds": [201, 202, 203, 204, 205],
+    "scenario_definitions": {
+      "training_scenario": "SCENARIO_B_HOTSPOT",
+      "validation_scenario": "SCENARIO_B_HOTSPOT",
+      "heldout_scenarios": [
+        "SCENARIO_A_ROUTINE",
+        "SCENARIO_B_HOTSPOT",
+        "SCENARIO_C_MULTI_EVENT",
+        "SCENARIO_D_STRESS_TEST"
+      ]
+    },
+    "fixed_parameters": {
+      "num_users": 80,
+      "num_uavs": 4,
+      "reference_clusters": 4,
+      "area_radius_m": 500.0,
+      "k_comm": 3,
+      "uav_cruise_speed_mps": 15.0,
+      "guidance_coef": 0.35,
+      "t_miss_penalty_s": 2.0,
+      "slot_duration_s": 1.0,
+      "total_slots": 500
+    }
+  }
+}
+

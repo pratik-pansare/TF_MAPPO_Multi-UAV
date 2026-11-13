@@ -1,0 +1,45 @@
+{
+  "manifest_version": "1.0.0",
+  "project": "TF_MAPPO_Multi-UAV",
+  "repository": "pratik-pansare/TF_MAPPO_Multi-UAV",
+  "target_journal": "IEEE Internet of Things Journal",
+  "feature_branch": "feature-ieee-causal-engine",
+  "commit_base_sha": "07f11cfd1ba50b22b3417bef48d9c2f915ed37f7",
+  "execution_environment": {
+    "os": "macOS (Darwin)",
+    "architecture": "arm64",
+    "processor": "Apple M1",
+    "python_version": "3.14.0",
+    "torch_version": "2.13.0",
+    "torch_threads": 8,
+    "device": "cpu"
+  },
+  "causal_engine_specifications": {
+    "exogenous_trace_generation": "Pre-generated policy-independent task arrival traces using dedicated RNG stream per scenario",
+    "finite_buffers": "Finite FIFO/EDF buffers (capacity=5) per IoT device with overflow tracking and unsatisfied ledger records",
+    "task_lifecycle": "PENDING -> ASSIGNED_UPLOAD -> UPLOADING / PAUSED_UPLOADING -> UPLOADED (staging) -> QUEUED (resident) -> IN_SERVICE -> COMPLETED_ON_TIME / EXPIRED",
+    "upload_binding": "Immutable source-to-UAV binding; partial uploads pause upon connection loss without transferring bits to other UAVs",
+    "mobility_model": "Piecewise continuous fly-then-hover: t_fly = min(Delta_t, ||Delta q|| / V_cr), t_hover = Delta_t - t_fly; no upload permitted during flight",
+    "boundary_promotion": "Uploaded tasks in slot t enter resident onboard CPU queues exclusively at slot t+1",
+    "cpu_allocation": "Discrete per-resident-job CPU frequency allocation bounded by F_m^max * phi_m(t)",
+    "radio_concurrency": "Hard active link limit sum_i u_im <= K_m^comm (K_m^comm=3) and exclusivity sum_m u_im <= 1",
+    "cluster_targeting": "Multi-UAV choice of identical cluster targets enabled (strict_exclusivity=False) with target-conditioned continuous guidance beta=0.35",
+    "objective_p1": "Completion-aware mission-level T_svc calculated over ALL generated tasks (deadline + T_miss penalty for unsatisfied tasks); zero synthetic percentage fallbacks"
+  },
+  "paper_reference_parameters": {
+    "num_users_n": 80,
+    "num_uavs_m": 4,
+    "reference_clusters_c": 4,
+    "area_geometry": "Circular service area of radius R_area = 500 m",
+    "k_comm": 3,
+    "uav_cruise_speed_v_cr": 15.0,
+    "slot_duration_delta_t": 1.0,
+    "mission_duration_s": 500.0,
+    "t_miss_penalty_s": 2.0,
+    "omega_e": 0.5,
+    "omega_t": 0.5,
+    "omega_d": 0.5
+  },
+  "equal_budget_guarantee": "All compared baseline algorithms evaluated within identical physical causal constraints, identical exogenous traces, and equal training budgets"
+}
+

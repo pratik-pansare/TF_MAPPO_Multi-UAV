@@ -70,6 +70,61 @@ METHOD_COLORS = {
 }
 
 
+def benchmark_real_inference_time(cs_rt, num_iot=80, num_uavs=4, n_trials=100, device="cpu", save_path=None):
+    """
+    Measures REAL forward inference runtime using time.perf_counter() across >= 100 warm repetitions.
+    Reports empirical mean, std, p50, and p95 with hardware disclosure. Zero synthetic formulas.
+    """
+    import platform
+    hw_info = {
+        'system': platform.system(),
+        'machine': platform.machine(),
+        'processor': platform.processor() or "Apple Silicon",
+        'device': device,
+        'torch_version': torch.__version__,
+        'torch_threads': torch.get_num_threads(),
+    }
+
+    benchmark_results = {}
+    for c in cs_rt:
+        env = MultiUAVMECEnv(num_users=num_iot, num_uavs=num_uavs, num_clusters=c)
+        obs, state = env.reset(seed=42)
+        mask = env.get_action_mask()
+        agent = make_agent("PROPOSED", obs_dim=env.local_obs_dim, state_dim=env.global_state_dim,
+                           action_dim=env.agent_action_dim, n_agents=num_uavs,
+                           n_clusters=c, max_candidate_pool=env.max_candidate_pool, device=device)
+
+        # Warmup (10 runs)
+        for _ in range(10):
+            agent.get_actions(obs, state, action_mask=mask, deterministic=True)
+
+        durations = []
+        for _ in range(n_trials):
+            t0 = time.perf_counter()
+            agent.get_actions(obs, state, action_mask=mask, deterministic=True)
+            t1 = time.perf_counter()
+            durations.append((t1 - t0) * 1000.0)
+
+        benchmark_results[c] = {
+            'mean_ms': float(np.mean(durations)),
+            'std_ms': float(np.std(durations)),
+            'p50_ms': float(np.percentile(durations, 50)),
+            'p95_ms': float(np.percentile(durations, 95)),
+            'trials': n_trials
+        }
+
+    out_payload = {
+        'hardware': hw_info,
+        'benchmarks': benchmark_results
+    }
+    if save_path:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        with open(save_path, "w") as f:
+            json.dump(out_payload, f, indent=2)
+
+    return benchmark_results, hw_info
+
+
 def compute_p1_cost(total_energy, avg_latency, completion_ratio_pct,
                     omega_e=0.4, omega_t=0.4, omega_d=0.2, e_ref=600000.0, t_ref=2.0):
     """
@@ -341,6 +396,11 @@ def evaluate_policy(method, ckpt_path, seed, num_iot=80, num_uavs=4, num_cluster
     summary_file = os.path.join(eval_dir, f"eval_summary_{run_tag}.json")
     with open(summary_file, "w") as f:
         json.dump(summary, f, indent=4)
+
+    # Export raw task ledger for machine-readable provenance
+    if hasattr(env, 'task_ledger') and env.task_ledger is not None and len(env.task_ledger.records) > 0:
+        ledger_file = os.path.join(eval_dir, f"task_ledger_{run_tag}.csv")
+        env.task_ledger.export_csv(ledger_file)
 
     # Save trajectories
     traj_file = os.path.join(traj_dir, f"trajectory_{run_tag}.csv")
@@ -969,22 +1029,25 @@ def generate_all_publication_figures(results_dir, figures_dir, c_geo=12, c_val=6
             else:
                 labels_d.append(m)
 
-        # Fig 11: Latency Breakdown (T_up + T_que + T_exe = T_tot)
-        fig, ax = plt.subplots(figsize=(7.0, 4.2), dpi=300)
-        up_d = [d.get('avg_uplink_latency', 0.25 * d['avg_latency']) for d in decomp_data]
-        que_d = [d.get('avg_queue_latency', 0.40 * d['avg_latency']) for d in decomp_data]
-        exe_d = [d.get('avg_cpu_latency', 0.35 * d['avg_latency']) for d in decomp_data]
+        # Fig 11: Real Latency Breakdown (T_wait + T_up + T_que + T_exe = T_tot)
+        fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=300)
+        wait_d = [d.get('avg_wait_latency', 0.0) for d in decomp_data]
+        up_d = [d.get('avg_uplink_latency', 0.0) for d in decomp_data]
+        que_d = [d.get('avg_queue_latency', 0.0) for d in decomp_data]
+        exe_d = [d.get('avg_cpu_latency', 0.0) for d in decomp_data]
 
-        ax.bar(x, up_d, width=0.45, label=r'Uplink Radio Transmission ($T_{i,m}^{\mathrm{up}}$)', color='#457b9d')
-        ax.bar(x, que_d, width=0.45, bottom=up_d, label=r'MEC Queue Waiting ($T_m^{\mathrm{que}}$)', color='#e63946')
-        b_e = [u + q for u, q in zip(up_d, que_d)]
-        ax.bar(x, exe_d, width=0.45, bottom=b_e, label=r'Onboard CPU Execution ($T_{i,m}^{\mathrm{exe}}$)', color='#f4a261')
+        ax.bar(x, wait_d, width=0.45, label=r'Device Buffer Wait ($T_i^{\mathrm{wait}}$)', color='#6c757d')
+        ax.bar(x, up_d, width=0.45, bottom=wait_d, label=r'Uplink Transmission ($T_{i,m}^{\mathrm{up}}$)', color='#457b9d')
+        b_que = [w + u for w, u in zip(wait_d, up_d)]
+        ax.bar(x, que_d, width=0.45, bottom=b_que, label=r'MEC Queue Waiting ($T_m^{\mathrm{que}}$)', color='#e63946')
+        b_exe = [b + q for b, q in zip(b_que, que_d)]
+        ax.bar(x, exe_d, width=0.45, bottom=b_exe, label=r'Onboard CPU Execution ($T_{i,m}^{\mathrm{exe}}$)', color='#f4a261')
 
         ax.set_xticks(x)
         ax.set_xticklabels(labels_d)
         ax.set_ylabel('Average Task Latency (seconds)')
-        ax.set_title('End-to-End Task Latency Component Decomposition')
-        ax.legend(loc='upper right', fontsize=8.5)
+        ax.set_title('End-to-End Task Latency Component Decomposition (Causal Engine)')
+        ax.legend(loc='upper right', fontsize=8.0)
         for i, d in enumerate(decomp_data):
             tot = d['avg_latency']
             ax.text(i, tot + 0.04, f"{tot:.2f}s", ha='center', fontsize=8.5, fontweight='bold')
@@ -1190,7 +1253,15 @@ def generate_all_publication_figures(results_dir, figures_dir, c_geo=12, c_val=6
         cs_rt = [int(r['C']) for r in rows]
         runtimes_ms = [float(r.get('fit_time_ms', r.get('runtime_ms', 5.0))) for r in rows]
 
-        inf_times = [0.65 + 0.02 * c for c in cs_rt]
+        bench_json = os.path.join(results_dir, "inference_benchmark.json")
+        if os.path.exists(bench_json):
+            with open(bench_json, "r") as f:
+                bench_data = json.load(f).get('benchmarks', {})
+        else:
+            bench_data, _ = benchmark_real_inference_time(cs_rt, num_iot=80, num_uavs=4, n_trials=100, device="cpu", save_path=bench_json)
+
+        inf_means = [bench_data[str(c)]['mean_ms'] if str(c) in bench_data else bench_data[c]['mean_ms'] for c in cs_rt]
+        inf_stds = [bench_data[str(c)]['std_ms'] if str(c) in bench_data else bench_data[c]['std_ms'] for c in cs_rt]
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.0, 3.8), dpi=300)
         ax1.plot(cs_rt, runtimes_ms, marker='o', color='#1d3557', lw=1.8)
@@ -1199,11 +1270,12 @@ def generate_all_publication_figures(results_dir, figures_dir, c_geo=12, c_val=6
         ax1.set_title('(a) Pre-Deployment K-means++ (20 Restarts)')
         ax1.set_xticks(cs_rt)
 
-        ax2.plot(cs_rt, inf_times, marker='s', color='#2a9d8f', lw=1.8)
+        ax2.errorbar(cs_rt, inf_means, yerr=inf_stds, marker='s', color='#2a9d8f', lw=1.8, capsize=3, label='Real Emp. (CPU)')
         ax2.set_xlabel('Spatial Cluster Count $C$')
         ax2.set_ylabel('Inference Time (ms / step)')
-        ax2.set_title('(b) Actor-Critic Decision Forward Time (CPU)')
+        ax2.set_title('(b) Measured Forward Time (perf_counter, N=100)')
         ax2.set_xticks(cs_rt)
+        ax2.legend(loc='best')
 
         plt.tight_layout()
         fig.savefig(os.path.join(figures_dir, "fig18_cluster_preprocessing_and_policy_runtime.pdf"))

@@ -142,10 +142,10 @@ class JointSafetyShield:
         self.total_shield_interventions = 0
         self.link_conflicts_resolved = 0
 
-    def resolve_cluster_conflicts(self, proposed_clusters, uav_positions=None, cluster_centroids=None, eligibility=None, strict_exclusivity=True):
+    def resolve_cluster_conflicts(self, proposed_clusters, uav_positions=None, cluster_centroids=None, eligibility=None, strict_exclusivity=False):
         """
         Enforce cluster target exclusivity deterministically when strict_exclusivity=True,
-        or allow multi-UAV regional concentration when strict_exclusivity=False.
+        or allow multi-UAV regional concentration when strict_exclusivity=False (default).
         """
         if eligibility is None:
             eligibility = np.ones(self.n_uavs, dtype=int)
@@ -231,25 +231,71 @@ class JointSafetyShield:
 
         return scheduled
 
-    def check_continuous_separation(self, p1, p2, d1, d2):
+    def check_piecewise_fly_hover_separation(self, p1, p2, d1, d2, v_cr=15.0, delta_t=1.0):
         """
-        Check minimum Euclidean separation over continuous segment s in [0, 1]:
-          D(s)^2 = ||(p1 - p2) + s*(d1 - d2)||^2
-        Returns: min_distance, s_crit
+        Check minimum Euclidean separation over actual piecewise fly-then-hover trajectories:
+        Each UAV flies at cruise speed v_cr during [0, t_fly], then hovers at destination during [t_fly, delta_t].
         """
-        dp = np.array(p1, dtype=float) - np.array(p2, dtype=float)
-        dv = np.array(d1, dtype=float) - np.array(d2, dtype=float)
+        norm1 = np.linalg.norm(d1)
+        norm2 = np.linalg.norm(d2)
+        t_f1 = min(float(delta_t), float(norm1 / max(v_cr, 1e-3)))
+        t_f2 = min(float(delta_t), float(norm2 / max(v_cr, 1e-3)))
 
-        dv_sq = np.sum(dv ** 2)
-        if dv_sq < 1e-9:
-            return float(np.linalg.norm(dp)), 0.0
+        # Velocity vectors during flight phase
+        v1 = d1 / max(t_f1, 1e-6) if t_f1 > 1e-6 else np.zeros(3)
+        v2 = d2 / max(t_f2, 1e-6) if t_f2 > 1e-6 else np.zeros(3)
 
-        s_star = -np.dot(dp, dv) / dv_sq
-        s_crit = float(np.clip(s_star, 0.0, 1.0))
-        d_min = float(np.linalg.norm(dp + s_crit * dv))
-        return d_min, s_crit
+        # Critical transition times partitioning [0, delta_t]
+        tau_cuts = sorted(list(set([0.0, min(t_f1, t_f2), max(t_f1, t_f2), float(delta_t)])))
 
-    def shield_trajectories(self, uav_positions, proposed_displacements):
+        min_dist = float('inf')
+        t_crit = 0.0
+
+        for i in range(len(tau_cuts) - 1):
+            t_a = tau_cuts[i]
+            t_b = tau_cuts[i + 1]
+            if t_b - t_a < 1e-7:
+                continue
+
+            # Position functions on [t_a, t_b]
+            # q1(t) = A1 + B1 * t
+            if t_a >= t_f1:
+                A1 = p1 + d1
+                B1 = np.zeros(3)
+            else:
+                A1 = p1
+                B1 = v1
+
+            if t_a >= t_f2:
+                A2 = p2 + d2
+                B2 = np.zeros(3)
+            else:
+                A2 = p2
+                B2 = v2
+
+            delta_A = A1 - A2
+            delta_B = B1 - B2
+
+            denom = np.dot(delta_B, delta_B)
+            if denom < 1e-9:
+                cand_t = [t_a, t_b]
+            else:
+                t_star = -np.dot(delta_A, delta_B) / denom
+                cand_t = [t_a, t_b, float(np.clip(t_star, t_a, t_b))]
+
+            for t_eval in cand_t:
+                sep = np.linalg.norm(delta_A + delta_B * t_eval)
+                if sep < min_dist:
+                    min_dist = sep
+                    t_crit = t_eval
+
+        return float(min_dist), float(t_crit)
+
+    def check_continuous_separation(self, p1, p2, d1, d2, v_cr=15.0, delta_t=1.0):
+        """Dispatches to piecewise fly-then-hover separation check."""
+        return self.check_piecewise_fly_hover_separation(p1, p2, d1, d2, v_cr=v_cr, delta_t=delta_t)
+
+    def shield_trajectories(self, uav_positions, proposed_displacements, v_cr=15.0, delta_t=1.0):
         """
         Enforce continuous pairwise separation and physical boundary constraints.
         Returns: safe_displacements, intervention_flag
@@ -257,12 +303,13 @@ class JointSafetyShield:
         safe_disp = np.copy(proposed_displacements)
         intervened = False
 
-        # 1. Pairwise Continuous Collision Avoidance
+        # 1. Pairwise Piecewise Fly-Hover Continuous Collision Avoidance
         for m in range(self.n_uavs):
             for n in range(m + 1, self.n_uavs):
-                d_min, s_crit = self.check_continuous_separation(
+                d_min, s_crit = self.check_piecewise_fly_hover_separation(
                     uav_positions[m], uav_positions[n],
-                    safe_disp[m], safe_disp[n]
+                    safe_disp[m], safe_disp[n],
+                    v_cr=v_cr, delta_t=delta_t
                 )
 
                 if d_min < self.safe_dist:

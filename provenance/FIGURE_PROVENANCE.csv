@@ -1,0 +1,20 @@
+figure_id,figure_name,script_source,data_source,description,status
+fig01,fig01_reward_training_by_algorithm,run_experiments.py,results/new_experiment/logs/*/training_progress.csv,Reward training convergence across algorithms under matched budgets,Verified
+fig02,fig02_model_comparison_metrics_C4,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_*.json,Completion ratio and mean latency comparison across algorithms at C=4,Verified
+fig03,fig03_model_comparison_P1_C4,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_*.json,Problem P1 multi-objective cost across algorithms at C=4,Verified
+fig04,fig04_cluster_inertia_silhouette_radius,experiments/run_clustering_selection.py,results/new_experiment/clustering/cluster_selection_metrics.csv,Pre-deployment spatial cluster inertia silhouette and maximum radius vs C,Verified
+fig05,fig05_cluster_layouts,experiments/run_clustering_selection.py,results/new_experiment/clustering/cluster_layouts.json,2D spatial cluster partition layouts for candidate values of C,Verified
+fig06,fig06_proposed_metrics_vs_C,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_PROPOSED_C*.json,Proposed model completion ratio and mean latency vs cluster count C,Verified
+fig07,fig07_proposed_reward_convergence_by_C,run_experiments.py,results/new_experiment/logs/PROPOSED_C*/training_progress.csv,Proposed model training reward convergence across candidate cluster counts C,Verified
+fig08,fig08_algorithm_by_cluster_interaction,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_*.json,Algorithm by cluster count interaction matrix (PROPOSED vs MAPPO vs GREEDY),Verified
+fig09,fig09_4uav_trajectories_C4_Cgeo_Cval,run_experiments.py,results/new_experiment/trajectories/trajectory_*.csv,4-UAV 3D trajectories across C=4 C_geo and C_val,Verified
+fig10,fig10_active_links_vs_time,run_experiments.py,results/new_experiment/trajectories/active_links_*.csv,Time-varying active uplink communication links across mission duration,Verified
+fig11,fig11_latency_decomposition,run_experiments.py,results/new_experiment/eval_metrics/task_ledger_*.csv,Exact per-task latency decomposition (wait uplink queue execution) with zero synthetic fallbacks,Verified
+fig12,fig12_uav_energy_decomposition,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_*.json,UAV fleet energy decomposition (piecewise propulsion computation U2U),Verified
+fig13,fig13_hotspot_response,run_experiments.py,results/new_experiment/trajectories/trajectory_*.csv,UAV fleet dynamic response and convergence to localized hotspot surge,Verified
+fig14,fig14_fault_and_certificate_expiry,run_experiments.py,results/new_experiment/trajectories/trajectory_*.csv,UAV operational fault injection and authentication certificate lapse recovery,Verified
+fig15,fig15_uav_count_sensitivity,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_PROPOSED_M*.json,Fleet size scalability sensitivity across M in [4 5 6 8],Verified
+fig16,fig16_communication_cap_sensitivity,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_PROPOSED_K*.json,Concurrency radio cap sensitivity across K_comm in [1 2 3 4 5],Verified
+fig17,fig17_ablation_and_masking,run_experiments.py,results/new_experiment/eval_metrics/eval_summary_*.json,Action-masking ablation comparing masked vs unmasked policy performance,Verified
+fig18,fig18_cluster_preprocessing_and_policy_runtime,run_experiments.py,results/new_experiment/inference_benchmark.json,Empirical clustering preprocessing runtime and real perf_counter forward inference time,Verified
+

@@ -59,6 +59,16 @@ class EnergyManager:
         p_parasitic = 0.5 * DRAG_RATIO * AIR_DENSITY * ROTOR_SOLIDITY * DISC_AREA * (v ** 3)
         return p_blade + p_induced + p_parasitic
 
+    def compute_piecewise_propulsion_energy(self, t_fly, t_hover, v_cr=15.0):
+        """
+        Compute piecewise rotary-wing propulsion energy:
+          E_prop = P_m^{fly}(v_cr) * t_fly + P_m^{hov} * t_hover
+        where P_m^{hov} = P_m^{fly}(0).
+        """
+        p_fly = self.compute_propulsion_power(v_cr)
+        p_hov = self.compute_propulsion_power(0.0)
+        return float(p_fly * max(0.0, t_fly) + p_hov * max(0.0, t_hover))
+
     def compute_computation_energy(self, allocated_cpu_hz, execution_delay_s):
         """Compute onboard CPU computation energy E_{i,m}^{comp}(t) = kappa * f^3 * T^{exe} (Eq. 24)."""
         return self.kappa * (allocated_cpu_hz ** 3) * execution_delay_s

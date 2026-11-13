@@ -49,14 +49,18 @@ class MetricTracker:
         self.recovery_times = []
         self.trust_violations_blocked = 0
 
+        self.completed_task_latencies = []
+        self.all_wait_delays = []
         self.all_upload_delays = []
         self.all_queue_delays = []
         self.all_execution_delays = []
 
         self.prev_uav_positions = None
+        self.last_env = None
 
     def update_step(self, env, rewards, info):
         """Update metric counters for one environment transition."""
+        self.last_env = env
         # 1. Latency & Tasks
         slot_comp = info.get('completed_tasks_step', 0)
         slot_exp = info.get('expired_tasks_step', 0)
@@ -71,12 +75,12 @@ class MetricTracker:
         if slot_comp > 0:
             self.step_latencies.append(info.get('mean_slot_latency', 0.0))
             for task in info.get('slot_completed_tasks', []):
-                if getattr(task, 'upload_delay', None) is not None:
-                    self.all_upload_delays.append(float(task.upload_delay))
-                if getattr(task, 'queue_delay', None) is not None:
-                    self.all_queue_delays.append(float(task.queue_delay))
-                if getattr(task, 'execution_delay', None) is not None:
-                    self.all_execution_delays.append(float(task.execution_delay))
+                decomp = task.get_latency_decomposition() if hasattr(task, 'get_latency_decomposition') else {}
+                self.completed_task_latencies.append(float(getattr(task, 'total_latency', decomp.get('total_latency', 0.0))))
+                self.all_wait_delays.append(float(decomp.get('t_wait', getattr(task, 'wait_delay', 0.0))))
+                self.all_upload_delays.append(float(decomp.get('t_up', getattr(task, 'upload_delay', 0.0))))
+                self.all_queue_delays.append(float(decomp.get('t_que', getattr(task, 'queue_delay', 0.0))))
+                self.all_execution_delays.append(float(decomp.get('t_exe', getattr(task, 'execution_delay', 0.0))))
 
         # 2. Energy
         self.step_energies.append(info.get('total_energy', 0.0))
@@ -110,7 +114,14 @@ class MetricTracker:
 
     def get_episode_summary(self):
         """Compute statistical summary for completed episode."""
-        avg_lat = float(np.mean(self.step_latencies)) if len(self.step_latencies) > 0 else 0.0
+        # Individual completed-task latency mean (NOT unweighted mean of per-slot averages)
+        if len(self.completed_task_latencies) > 0:
+            avg_lat = float(np.mean(self.completed_task_latencies))
+        elif len(self.step_latencies) > 0:
+            avg_lat = float(np.mean(self.step_latencies))
+        else:
+            avg_lat = 0.0
+
         tot_energy = float(np.sum(self.step_energies)) if len(self.step_energies) > 0 else 0.0
         tot_prop = float(np.sum(self.step_propulsion)) if len(self.step_propulsion) > 0 else 0.0
         tot_comp = float(np.sum(self.step_computation)) if len(self.step_computation) > 0 else 0.0
@@ -123,15 +134,34 @@ class MetricTracker:
         mean_rec_time = float(np.mean(self.recovery_times)) if len(self.recovery_times) > 0 else 0.0
         mean_reward = float(np.mean(self.step_rewards)) if len(self.step_rewards) > 0 else 0.0
 
-        avg_uplink = float(np.mean(self.all_upload_delays)) if len(self.all_upload_delays) > 0 else 0.25 * avg_lat
-        avg_queue = float(np.mean(self.all_queue_delays)) if len(self.all_queue_delays) > 0 else 0.40 * avg_lat
-        avg_cpu = float(np.mean(self.all_execution_delays)) if len(self.all_execution_delays) > 0 else 0.35 * avg_lat
+        # Exact latency decomposition with zero guessed synthetic fallbacks
+        avg_wait = float(np.mean(self.all_wait_delays)) if len(self.all_wait_delays) > 0 else 0.0
+        avg_uplink = float(np.mean(self.all_upload_delays)) if len(self.all_upload_delays) > 0 else 0.0
+        avg_queue = float(np.mean(self.all_queue_delays)) if len(self.all_queue_delays) > 0 else 0.0
+        avg_cpu = float(np.mean(self.all_execution_delays)) if len(self.all_execution_delays) > 0 else 0.0
+
+        # Mission-level Problem P1 objective from ledger if available
+        t_svc = avg_lat
+        eta_task = comp_ratio / 100.0
+        if self.last_env is not None and hasattr(self.last_env, 'task_ledger') and len(self.last_env.task_ledger.records) > 0:
+            t_svc, eta_task = self.last_env.task_ledger.compute_mission_service_latency_and_completion(t_miss=2.0)
+
+        n_uavs = len(self.last_env.uavs) if self.last_env is not None else 4
+        e_ref = max(n_uavs * 200.0 * 500.0, 1.0)  # Reference mission fleet energy
+        t_ref = 2.0
+        omega_e = 0.5
+        omega_t = 0.5
+        omega_d = 0.5
+        p1_objective = omega_e * (tot_energy / e_ref) + omega_t * (t_svc / t_ref) + omega_d * (1.0 - eta_task)
 
         return {
             'avg_latency': avg_lat,
+            'avg_wait_latency': avg_wait,
             'avg_uplink_latency': avg_uplink,
             'avg_queue_latency': avg_queue,
             'avg_cpu_latency': avg_cpu,
+            't_svc': float(t_svc),
+            'p1_objective': float(p1_objective),
             'total_energy': tot_energy,
             'propulsion_energy': tot_prop,
             'computation_energy': tot_comp,

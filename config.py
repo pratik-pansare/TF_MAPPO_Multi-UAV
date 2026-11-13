@@ -12,14 +12,18 @@ import numpy as np
 # ============================================================
 # 1. AREA & DEPLOYMENT MODEL
 # ============================================================
-AREA_RADIUS   = 500         # Service area radius (m)
-NUM_USERS     = 100         # Number of static ground IoT devices (N)
+AREA_RADIUS   = 500         # Service area radius (m) (circular deployment)
+NUM_USERS     = 80          # Reference static ground IoT devices (N)
 MAX_NUM_USERS = 180
-NUM_UAVS      = 5           # Number of rotary-wing UAV-MEC servers (M)
+NUM_UAVS      = 4           # Reference rotary-wing UAV-MEC servers (M)
 MAX_UAVS      = 8
 MIN_UAVS      = 3
-NUM_CLUSTERS  = 5           # Number of pre-deployment IoT service clusters (C)
+NUM_CLUSTERS  = 4           # Reference spatial clusters (C), independent of M
 NUM_JAMMERS   = 0           # Jammer module disabled for this paper
+UAV_CRUISE_SPEED = 15.0     # Nominal cruise speed V_cr (m/s)
+GUIDANCE_COEF    = 0.35     # Target-conditioned guidance coefficient beta_guidance
+T_MISS_PENALTY   = 2.0      # Deadline miss penalty duration T_miss for Problem P1
+OMEGA_D          = 0.5      # Completion ratio weight in Problem P1
 
 # ============================================================
 # 2. HETEROGENEOUS UAV PROFILES
