@@ -9,6 +9,8 @@ __pycache__/
 Implementation_Prompt.md
 # Ignore heavy checkpoints and large raw binary data
 results/checkpoints/
+results/smoke_test/
+legacy_results/
 *.pt
 *.npz
 *.jsonl
