@@ -40,6 +40,19 @@
     "omega_t": 0.5,
     "omega_d": 0.5
   },
+  "training_protocol": {
+    "default_training_steps": 150000,
+    "pilot_training_steps": 30000,
+    "conditional_extended_steps": 250000,
+    "rollout_length": 500,
+    "validation_interval": 25000,
+    "checkpoint_interval": 25000,
+    "checkpoint_selection_rule": "validation_p1_subject_to_feasibility",
+    "stabilization_window_intervals": 3,
+    "preliminary_screening_seeds": [42, 43, 44],
+    "final_reporting_seeds": [42, 43, 44, 45, 46],
+    "cache_reuse_guarantee": "Completed checkpoints are automatically reused to prevent redundant retraining"
+  },
   "equal_budget_guarantee": "All compared baseline algorithms evaluated within identical physical causal constraints, identical exogenous traces, and equal training budgets"
 }
 

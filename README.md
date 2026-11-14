@@ -147,22 +147,28 @@ TF_MAPPO_Multi-UAV/
 
 ## Master Experiment Runner (`run_experiments.py`)
 
-A single, unified CLI supports all execution modes:
+A single, unified CLI supports all execution modes under the revised IEEE IoT-J experimental protocol (150,000 steps default cap, 25,000-step validation cadence, 30,000-step pilot):
 
 ```bash
-# 1. Smoke Mode: Fast pipeline check (3,000 steps, evaluation, plots)
+# 1. Smoke Mode: Fast model-invariant pipeline check (1,000 steps, screening, evaluation)
 ./venv/bin/python run_experiments.py --mode smoke
 
-# 2. Pilot Mode: Mid-scale training (25,000 steps, checkpoints, evaluation, plots)
+# 2. Pilot Mode: Verification pilot before full training (30,000 steps across core comparative models)
 ./venv/bin/python run_experiments.py --mode pilot
 
-# 3. Full Production Training: 50,000+ steps across seeds
-./venv/bin/python run_experiments.py --mode full --total-steps 50000 --seeds 2
+# 3. Full Production Training: Standardized 150,000 steps per model with 25,000-step validation cadence
+./venv/bin/python run_experiments.py --mode full --total-steps 150000
 
-# 4. Evaluation Only: Evaluates checkpoints on matched seeds and logs CSV traces
-./venv/bin/python run_experiments.py --mode eval
+# 4. Multi-Seed Reporting: 5 independent seeds for final comparisons & 95% confidence intervals
+./venv/bin/python run_experiments.py --mode full --total-steps 150000 --seeds 42 43 44 45 46
 
-# 5. Publication Plots Only: Generates all vector PDF & PNG figures from saved CSVs
+# 5. Standalone Single Model Training (e.g. Proposed TF-MAPPO on GPU with cached checkpoint reuse)
+./venv/bin/python run_experiments.py --mode train --method PROPOSED --total-steps 150000 --device cuda
+
+# 6. Evaluation Only: Evaluates checkpoints on matched seeds and logs CSV traces & task ledgers
+./venv/bin/python run_experiments.py --mode eval --method PROPOSED
+
+# 7. Publication Plots Only: Generates all 18 vector PDF & PNG figures from saved CSVs
 ./venv/bin/python run_experiments.py --mode plot
 ```
 

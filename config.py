@@ -114,7 +114,7 @@ SAFE_INTER_UAV_DISTANCE = 10.0   # Minimum safe distance d_safe (m)
 MIN_TASK_COMPLETION_RATIO = 0.85 # Constraint C11 (eta_min)
 
 # ============================================================
-# 8. MAPPO TRAINING HYPERPARAMETERS
+# 8. MAPPO TRAINING HYPERPARAMETERS & PROTOCOL
 # ============================================================
 MAPPO_LR_ACTOR         = 3e-4
 MAPPO_LR_CRITIC        = 1e-4
@@ -124,17 +124,29 @@ MAPPO_CLIP_EPS         = 0.2
 MAPPO_ENTROPY_COEF     = 0.01
 MAPPO_VALUE_COEF       = 0.5
 MAPPO_MAX_GRAD_NORM    = 0.5
-MAPPO_ROLLOUT_LENGTH   = 500
+MAPPO_ROLLOUT_LENGTH   = 500     # Rollout length (steps per PPO update)
 MAPPO_NUM_MINI_BATCHES = 5
 MAPPO_PPO_EPOCHS       = 4
 MAPPO_HIDDEN_DIM       = 256
 MAPPO_CRITIC_HIDDEN_DIM = 512
 
-TOTAL_TIMESTEPS        = 5_000_000
-EVAL_INTERVAL          = 50_000
-CHECKPOINT_INTERVAL    = 500_000
-LOG_INTERVAL           = 2500
-NUM_SEEDS              = 5       # 5 random seeds for 95% CI reporting
+# Standardized Experimental Protocol Budgets (IEEE IoT-J revised protocol)
+DEFAULT_TRAINING_STEPS  = 150_000 # Standard default training cap per model per seed
+PILOT_TRAINING_STEPS    = 30_000  # Verification pilot before full experiments
+EXTENDED_TRAINING_STEPS = 250_000 # Conditional extension when convergence warrants it
+TOTAL_TIMESTEPS         = DEFAULT_TRAINING_STEPS
+
+# Validation, Checkpoint & Logging Cadence
+VALIDATION_INTERVAL     = 25_000  # Independent validation cadence (steps)
+CHECKPOINT_INTERVAL     = 25_000  # Checkpoint save interval (steps)
+EVAL_INTERVAL           = 25_000  # Evaluation interval
+LOG_INTERVAL            = 2500    # Rollout batch logging interval
+STABILIZATION_WINDOW    = 3       # Number of final validation intervals to inspect for convergence
+
+# Multi-Seed Experimental Protocols
+PRELIMINARY_SEEDS       = [42, 43, 44]             # 3 independent seeds for preliminary screening
+FINAL_SEEDS             = [42, 43, 44, 45, 46]     # 5 independent seeds for final comparisons & 95% CIs
+NUM_SEEDS               = len(FINAL_SEEDS)
 
 # ============================================================
 # 9. OBJECTIVE WEIGHTS (Problem P1)

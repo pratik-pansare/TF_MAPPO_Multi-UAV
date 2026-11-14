@@ -73,3 +73,23 @@ Where:
 
 All comparisons evaluate policies on identical held-out scenarios generated from real non-oracle discrete-event environmental schedules.
 
+---
+
+## 4. Standardized Training Protocol & Convergence Guarantee
+
+To maintain a defensible, rigorous, and computationally reproducible experimental protocol across all comparative baselines:
+
+1. **Default Training Budget**: Exactly **150,000 joint environment training steps** per learning model per seed. All compared learning algorithms (`PROPOSED`, `MAPPO`, `IPPO`, and each cluster-count configuration) share this identical budget.
+2. **Rollout Length**: Maintained strictly at **500 steps** per rollout batch.
+3. **Independent Validation & Periodic Checkpoints**: Conducted every **25,000 steps** on a disjoint validation seed (zero data leakage).
+4. **Checkpoint Selection**: The best checkpoint (`checkpoint_best.pt`) is selected strictly using validation Problem P1 cost subject to physical feasibility constraints, never held-out test performance.
+5. **Multi-Stage Execution**:
+   - **Stage 1 (Smoke Verification)**: 1,000 steps testing all 5 algorithms and geometric screening.
+   - **Stage 2 (Pilot Verification)**: 30,000 steps testing core comparative models before full runs (`--mode pilot`).
+   - **Stage 3 (Full Experiments)**: 150,000 steps per model across the full matrix (`--mode full`).
+6. **Seed Strategy & Statistical Significance**:
+   - **Preliminary Screening**: 3 independent seeds (`[42, 43, 44]`).
+   - **Final Reported Comparisons**: 5 independent seeds (`[42, 43, 44, 45, 46]`) reporting mean $\pm$ 95% confidence intervals ($1.96 \cdot \frac{\sigma}{\sqrt{N_{\text{seeds}}}}$).
+7. **Convergence & Stability Audit**: The final validation window (last 3 intervals: 100k, 125k, 150k steps) is inspected. If the relative spread exceeds 10%, a uniform extension to **250,000 steps** across the entire comparison group is recommended to preserve experimental parity.
+8. **Checkpoint Reuse**: Completed checkpoints are automatically detected and reused across pipeline stages (e.g., `PROPOSED` at $C=4$ is trained once and reused in Experiments A, B1, C, and sensitivity baselines).
+
